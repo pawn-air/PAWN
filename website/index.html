@@ -26,17 +26,6 @@
             }
         }
 
-        // Text-to-Speech function for pronunciation
-        function speakText(text, lang) {
-            if ('speechSynthesis' in window) {
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = lang;
-                utterance.rate = 0.9;
-                window.speechSynthesis.speak(utterance);
-            } else {
-                alert("Sorry, your browser doesn't support text to speech!");
-            }
-        }
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;600;800&display=swap');
@@ -238,7 +227,7 @@
                     class="glass-panel rounded-xl p-6 text-center glow-hover transition-all duration-300 transform hover:-translate-y-2">
                     <div
                         class="w-24 h-24 mx-auto bg-gray-800 rounded-full mb-4 flex items-center justify-center border-2 border-brand-light/50 overflow-hidden">
-                        <img src="images/berkay.jpeg" alt="Lütfü Heysem Kızıloğlu" class="w-full h-full object-cover"
+                        <img src="images/burkay.jpeg" alt="Lütfü Heysem Kızıloğlu" class="w-full h-full object-cover"
                             onerror="this.onerror=null; this.src='https://placehold.co/100x100/1e293b/38bdf8?text=BT';">
                     </div>
                     <h3 class="text-xl font-bold text-white mb-1">Burkay Tunçtürk</h3>
@@ -412,8 +401,8 @@
 
             <div class="glass-panel rounded-lg p-4 inline-flex items-center gap-4 border-brand-light/30">
                 <span class="font-mono text-gray-300 hidden sm:inline-block">git clone
-                    https://github.com/Bruhkay/PAWN</span>
-                <a href="https://github.com/Bruhkay/PAWN" target="_blank"
+                    https://github.com/pawn-air/PAWN</span>
+                <a href="https://github.com/pawn-air/PAWN" target="_blank"
                     class="px-6 py-3 bg-white text-black hover:bg-gray-200 rounded font-bold transition-colors flex items-center gap-2">
                     View on GitHub <i class="fa-solid fa-arrow-up-right-from-square text-sm"></i>
                 </a>
