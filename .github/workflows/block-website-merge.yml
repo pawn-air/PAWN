@@ -1,0 +1,17 @@
+name: Block Website Merge
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check source branch
+        if: github.head_ref == 'website'
+        run: |
+          echo "HATA: 'website' dali 'main' ile ASLA birlestirilemez!"
+          exit 1
+
