@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAWN (PİYON) | Multi-Drone Reconnaissance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            dark: '#0f172a',
+                            light: '#38bdf8',
+                            accent: '#0284c7'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+
+        // Text-to-Speech function for pronunciation
+        function speakText(text, lang) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = lang;
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            } else {
+                alert("Sorry, your browser doesn't support text to speech!");
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;600;800&display=swap');
+
+        body {
+            background-color: #050b14;
+            background-image:
+                linear-gradient(rgba(56, 189, 248, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(56, 189, 248, 0.05) 1px, transparent 1px);
+            background-size: 30px 30px;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+
+        .glow-hover:hover {
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+            border-color: rgba(56, 189, 248, 0.8);
+        }
+
+        .scan-line {
+            width: 100%;
+            height: 2px;
+            background: rgba(56, 189, 248, 0.5);
+            position: absolute;
+            top: 0;
+            left: 0;
+            animation: scan 3s linear infinite;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
+            opacity: 0.5;
+        }
+
+        @keyframes scan {
+            0% {
+                top: 0;
+            }
+
+            100% {
+                top: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body class="text-gray-300 font-sans antialiased overflow-x-hidden">
+
+    <!-- Sticky Navigation -->
+    <nav
+        class="fixed w-full z-50 glass-panel border-b-0 border-t-0 border-l-0 border-r-0 border-b border-brand-light/20 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-20">
+                <div class="flex-shrink-0 flex items-center gap-3 cursor-pointer" onclick="window.scrollTo(0,0)">
+                    <i class="fa-solid fa-drone text-brand-light text-2xl"></i>
+                    <span class="font-bold text-2xl tracking-wider text-white">PAWN<span
+                            class="text-brand-light font-mono text-sm ml-2">v1.0</span></span>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-8">
+                        <a href="#about"
+                            class="hover:text-brand-light px-3 py-2 rounded-md text-sm font-medium transition-colors">System
+                            Overview</a>
+                        <a href="#team"
+                            class="hover:text-brand-light px-3 py-2 rounded-md text-sm font-medium transition-colors">Team</a>
+                        <a href="#reports"
+                            class="hover:text-brand-light px-3 py-2 rounded-md text-sm font-medium transition-colors">Reports</a>
+                        <a href="#repo"
+                            class="hover:text-brand-light px-3 py-2 rounded-md text-sm font-medium transition-colors">Repository</a>
+                    </div>
+                </div>
+                <!-- Mobile menu button -->
+                <div class="md:hidden flex items-center">
+                    <button class="text-gray-300 hover:text-white focus:outline-none">
+                        <i class="fa-solid fa-bars text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="home" class="pt-32 pb-20 md:pt-48 md:pb-32 px-4 relative">
+        <div class="max-w-7xl mx-auto text-center relative z-10">
+            <div
+                class="inline-block mb-4 px-4 py-1 rounded-full glass-panel border border-brand-light/30 text-brand-light text-sm font-mono uppercase tracking-widest">
+                Senior Capstone Project
+            </div>
+            <h1 class="text-5xl md:text-7xl font-extrabold text-white mb-6 tracking-tight">
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-light to-blue-600">PAWN <br>
+                    (Photogrammetric Autonomous Workspace
+                    Navigator)</span>
+            </h1>
+            <p class="mt-4 text-xl md:text-2xl text-gray-400 max-w-3xl mx-auto font-light">
+                Vision-Based Multi-Drone System for Autonomous Reconnaissance & 3D Spatial Mapping.
+            </p>
+
+            <div class="mt-10 flex flex-col sm:flex-row justify-center gap-4">
+                <a href="#about"
+                    class="px-8 py-4 bg-brand-accent hover:bg-brand-light text-white rounded-lg font-semibold transition-all duration-300 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(2,132,199,0.5)]">
+                    <i class="fa-solid fa-satellite-dish"></i> Explore System
+                </a>
+
+            </div>
+        </div>
+
+        <!-- Abstract Drone Graphic element -->
+        <div
+            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-96 opacity-10 pointer-events-none">
+            <div
+                class="w-full h-full border border-brand-light rounded-full absolute animate-[ping_3s_cubic-bezier(0,0,0.2,1)_infinite]">
+            </div>
+            <div
+                class="w-full h-full border border-brand-light rounded-full absolute animate-[ping_4s_cubic-bezier(0,0,0.2,1)_infinite] delay-150">
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="py-20 relative">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">System Overview</h2>
+                <div class="w-24 h-1 bg-brand-light mx-auto rounded"></div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                <div class="space-y-6 text-lg text-gray-400">
+                    <p>
+                        <strong class="text-white">PAWN (PİYON)</strong> is an advanced collaborative multi-drone system
+                        engineered to perform complex reconnaissance missions and generate high-fidelity 3D spatial maps
+                        of unknown environments.
+                    </p>
+                    <p>
+                        By leveraging state-of-the-art computer vision, stereo-photogrammetry, and decentralized swarm
+                        logic, the drones coordinate seamlessly to cover ground efficiently, avoid obstacles, and stream
+                        real-time environmental data back to the base station.
+                    </p>
+                    <ul class="space-y-3 mt-4">
+                        <li class="flex items-center gap-3"><i class="fa-solid fa-check text-brand-light"></i>
+                            <span>Real-time 3D Point Cloud Generation</span>
+                        </li>
+                        <li class="flex items-center gap-3"><i class="fa-solid fa-check text-brand-light"></i>
+                            <span>Autonomous Multi-Agent Navigation</span>
+                        </li>
+                        <li class="flex items-center gap-3"><i class="fa-solid fa-check text-brand-light"></i>
+                            <span>Vision-Based Obstacle Avoidance</span>
+                        </li>
+                        <li class="flex items-center gap-3"><i class="fa-solid fa-check text-brand-light"></i>
+                            <span>Tactical Reconnaissance Mapping</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Mockup/Visual Area -->
+                <div
+                    class="relative h-80 rounded-xl overflow-hidden glass-panel glow-hover flex items-center justify-center group">
+                    <div class="scan-line hidden group-hover:block"></div>
+                    <div class="text-center p-6">
+                        <i class="fa-solid fa-cubes text-6xl text-brand-light/50 mb-4"></i>
+                        <p class="font-mono text-brand-light text-sm">3D_MAPPING_VISUALIZATION_PLACEHOLDER</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Team Section -->
+    <section id="team" class="py-20 bg-brand-dark/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Flight Crew</h2>
+                <div class="w-24 h-1 bg-brand-light mx-auto rounded"></div>
+                <p class="mt-4 text-gray-400">The engineering team behind PAWN.</p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6">
+                <!-- Team Member 1 -->
+                <div
+                    class="glass-panel rounded-xl p-6 text-center glow-hover transition-all duration-300 transform hover:-translate-y-2">
+                    <div
+                        class="w-24 h-24 mx-auto bg-gray-800 rounded-full mb-4 flex items-center justify-center border-2 border-brand-light/50 overflow-hidden">
+                        <i class="fa-solid fa-user-astronaut text-3xl text-gray-400"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-1">Lütfü Heysem Kızıloğlu</h3>
+                    <p class="text-brand-light text-sm font-mono mb-3">Computer Vision / Software Engineering</p>
+                    <div class="flex justify-center gap-3 text-gray-400">
+                        <a href="https://www.github.com/LutfuHeysem" class="hover:text-white transition-colors"><i
+                                class="fa-brands fa-github"></i></a>
+                        <a href="https://www.linkedin.com/lutfu-heysem-kiziloglu"
+                            class="hover:text-brand-light transition-colors"><i class="fa-brands fa-linkedin"></i></a>
+                    </div>
+                </div>
+
+                <!-- Team Member 2 -->
+                <div
+                    class="glass-panel rounded-xl p-6 text-center glow-hover transition-all duration-300 transform hover:-translate-y-2">
+                    <div
+                        class="w-24 h-24 mx-auto bg-gray-800 rounded-full mb-4 flex items-center justify-center border-2 border-brand-light/50 overflow-hidden">
+                        <i class="fa-solid fa-user-astronaut text-3xl text-gray-400"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-1">Burkay Tunçtürk</h3>
+                    <p class="text-brand-light text-sm font-mono mb-3">Hardware / Control / Autonomy</p>
+                    <div class="flex justify-center gap-3 text-gray-400">
+                        <a href="https://github.com/Bruhkay" class="hover:text-white transition-colors"><i
+                                class="fa-brands fa-github"></i></a>
+                        <a href="https://www.linkedin.com/in/burkay-tuncturk/"
+                            class="hover:text-brand-light transition-colors"><i class="fa-brands fa-linkedin"></i></a>
+                    </div>
+                </div>
+
+                <!-- Team Member 3 -->
+                <div
+                    class="glass-panel rounded-xl p-6 text-center glow-hover transition-all duration-300 transform hover:-translate-y-2">
+                    <div
+                        class="w-24 h-24 mx-auto bg-gray-800 rounded-full mb-4 flex items-center justify-center border-2 border-brand-light/50 overflow-hidden">
+                        <i class="fa-solid fa-user-astronaut text-3xl text-gray-400"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-1">Nijat Mukhtarov</h3>
+                    <p class="text-brand-light text-sm font-mono mb-3">Computer Vision / Autonomy</p>
+                    <div class="flex justify-center gap-3 text-gray-400">
+                        <a href="https://github.com/NijatMukhtar" class="hover:text-white transition-colors"><i
+                                class="fa-brands fa-github"></i></a>
+                        <a href="https://www.linkedin.com/in/nijat-mukhtarov-a16708242/"
+                            class="hover:text-brand-light transition-colors"><i class="fa-brands fa-linkedin"></i></a>
+                    </div>
+                </div>
+
+                <!-- Team Member 4 -->
+                <div
+                    class="glass-panel rounded-xl p-6 text-center glow-hover transition-all duration-300 transform hover:-translate-y-2">
+                    <div
+                        class="w-24 h-24 mx-auto bg-gray-800 rounded-full mb-4 flex items-center justify-center border-2 border-brand-light/50 overflow-hidden">
+                        <i class="fa-solid fa-user-astronaut text-3xl text-gray-400"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-1">Şebnem Bihter Keleş</h3>
+                    <p class="text-brand-light text-sm font-mono mb-3">Visual SLAM / Simulation</p>
+                    <div class="flex justify-center gap-3 text-gray-400">
+                        <a href="https://github.com/sebnemkls" class="hover:text-white transition-colors"><i
+                                class="fa-brands fa-github"></i></a>
+                        <a href="https://www.linkedin.com/in/%C5%9Febnem-kele%C5%9F-505087348/"
+                            class="hover:text-brand-light transition-colors"><i class="fa-brands fa-linkedin"></i></a>
+                    </div>
+                </div>
+
+                <!-- Team Member 5 -->
+                <div
+                    class="glass-panel rounded-xl p-6 text-center glow-hover transition-all duration-300 transform hover:-translate-y-2">
+                    <div
+                        class="w-24 h-24 mx-auto bg-gray-800 rounded-full mb-4 flex items-center justify-center border-2 border-brand-light/50 overflow-hidden">
+                        <i class="fa-solid fa-user-astronaut text-3xl text-gray-400"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-1">Doğa Ertürk</h3>
+                    <p class="text-brand-light text-sm font-mono mb-3">Visual SLAM / Simulation</p>
+                    <div class="flex justify-center gap-3 text-gray-400">
+                        <a href="https://github.com/dogaertrk" class="hover:text-white transition-colors"><i
+                                class="fa-brands fa-github"></i></a>
+                        <a href="https://www.linkedin.com/in/doga-erturk/"
+                            class="hover:text-brand-light transition-colors"><i class="fa-brands fa-linkedin"></i></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Reports Section -->
+    <section id="reports" class="py-20 relative">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Project Documentation</h2>
+                <div class="w-24 h-1 bg-brand-light mx-auto rounded"></div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Project Specification Document -->
+                <div
+                    class="glass-panel p-6 rounded-xl flex flex-col items-center text-center glow-hover group cursor-pointer">
+                    <div
+                        class="w-16 h-16 bg-brand-accent/20 rounded-full flex items-center justify-center mb-4 group-hover:bg-brand-accent/40 transition-colors">
+                        <i class="fa-solid fa-file-pdf text-2xl text-brand-light"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">Project Specification Document</h3>
+                    <p class="text-sm text-gray-400 mb-6">Initial requirements, architecture outline, and timeline
+                        constraints.</p>
+                    <button
+                        class="mt-auto px-4 py-2 bg-gray-800 text-gray-400 rounded cursor-not-allowed w-full flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-lock"></i> Coming Soon
+                    </button>
+                </div>
+
+                <!-- Analysis and Requirements Report -->
+                <div
+                    class="glass-panel p-6 rounded-xl flex flex-col items-center text-center glow-hover group cursor-pointer opacity-70 hover:opacity-100">
+                    <div
+                        class="w-16 h-16 bg-brand-accent/20 rounded-full flex items-center justify-center mb-4 group-hover:bg-brand-accent/40 transition-colors">
+                        <i class="fa-solid fa-file-pdf text-2xl text-brand-light"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">Analysis and Requirements Report</h3>
+                    <p class="text-sm text-gray-400 mb-6">Detailed analysis of the problem statement and requirements
+                        for the PAWN project.</p>
+                    <button
+                        class="mt-auto px-4 py-2 bg-gray-800 text-gray-400 rounded cursor-not-allowed w-full flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-lock"></i> Coming Soon
+                    </button>
+                </div>
+
+                <!-- Detailed Design Report -->
+                <div
+                    class="glass-panel p-6 rounded-xl flex flex-col items-center text-center glow-hover group cursor-pointer opacity-70 hover:opacity-100">
+                    <div
+                        class="w-16 h-16 bg-brand-accent/20 rounded-full flex items-center justify-center mb-4 group-hover:bg-brand-accent/40 transition-colors">
+                        <i class="fa-solid fa-file-pdf text-2xl text-brand-light"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">Detailed Design Document</h3>
+                    <p class="text-sm text-gray-400 mb-6">Architectural decisions, algorithm choices, and implementation
+                        details of the PAWN system.</p>
+                    <button
+                        class="mt-auto px-4 py-2 bg-gray-800 text-gray-400 rounded cursor-not-allowed w-full flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-lock"></i> Coming Soon
+                    </button>
+                </div>
+
+                <!-- Final Report -->
+                <div
+                    class="glass-panel p-6 rounded-xl flex flex-col items-center text-center glow-hover group cursor-pointer opacity-70 hover:opacity-100">
+                    <div
+                        class="w-16 h-16 bg-brand-accent/20 rounded-full flex items-center justify-center mb-4 group-hover:bg-brand-accent/40 transition-colors">
+                        <i class="fa-solid fa-file-pdf text-2xl text-brand-light"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">Final Report</h3>
+                    <p class="text-sm text-gray-400 mb-6">Comprehensive documentation, test results, and final mapping
+                        data.</p>
+                    <button
+                        class="mt-auto px-4 py-2 bg-gray-800 text-gray-400 rounded cursor-not-allowed w-full flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-lock"></i> Coming Soon
+                    </button>
+                </div>
+
+                <!-- Final Presentation -->
+                <div
+                    class="glass-panel p-6 rounded-xl flex flex-col items-center text-center glow-hover group cursor-pointer opacity-70 hover:opacity-100">
+                    <div
+                        class="w-16 h-16 bg-brand-accent/20 rounded-full flex items-center justify-center mb-4 group-hover:bg-brand-accent/40 transition-colors">
+                        <i class="fa-solid fa-file-pdf text-2xl text-brand-light"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">Final Presentation</h3>
+                    <p class="text-sm text-gray-400 mb-6">Presentation slides summarizing the project, its findings, and
+                        conclusions.</p>
+                    <button
+                        class="mt-auto px-4 py-2 bg-gray-800 text-gray-400 rounded cursor-not-allowed w-full flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-lock"></i> Coming Soon
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- GitHub Section -->
+    <section id="repo" class="py-20 bg-brand-dark/80 border-t border-brand-light/10">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <i class="fa-brands fa-github text-6xl text-white mb-6"></i>
+            <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Open Source Repository</h2>
+            <p class="text-gray-400 mb-8 text-lg">
+                Follow our development progress, review our flight control algorithms, and access our 3D spatial mapping
+                codebase.
+            </p>
+
+            <div class="glass-panel rounded-lg p-4 inline-flex items-center gap-4 border-brand-light/30">
+                <span class="font-mono text-gray-300 hidden sm:inline-block">git clone
+                    https://github.com/Bruhkay/PAWN</span>
+                <a href="https://github.com/Bruhkay/PAWN" target="_blank"
+                    class="px-6 py-3 bg-white text-black hover:bg-gray-200 rounded font-bold transition-colors flex items-center gap-2">
+                    View on GitHub <i class="fa-solid fa-arrow-up-right-from-square text-sm"></i>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-[#02060f] py-8 border-t border-gray-800">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="text-gray-500 font-mono text-sm">
+                &copy; <span id="year"></span> Project PAWN (PİYON). Senior Design Capstone. <br>
+                Built for reconnaissance. Designed for mapping.
+            </p>
+        </div>
+    </footer>
+
+</body>
+
+</html>
