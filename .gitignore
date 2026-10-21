@@ -1,0 +1,50 @@
+# ==========================================
+# ROS 2 / Colcon Workspace Artifacts
+# ==========================================
+pawn_ws/build/
+pawn_ws/install/
+pawn_ws/log/
+build/
+install/
+log/
+
+# ==========================================
+# ML Weights & Datasets (NEVER COMMIT THESE)
+# ==========================================
+*.pt
+*.pth
+*.onnx
+*.engine
+*.trt
+*.h5
+*.tflite
+*.weights
+pawn_ws/src/pawn_vision/weights/*
+!pawn_ws/src/pawn_vision/weights/.gitkeep
+!pawn_ws/src/pawn_vision/weights/download_weights.sh
+
+# ==========================================
+# ROS Bags, Videos & Map Dumps
+# ==========================================
+*.db3
+*.mcap
+*.bag
+*.mp4
+*.avi
+*.mkv
+*.pcd
+*.ply
+
+# ==========================================
+# Python / C++ / OS / IDE Junk
+# ==========================================
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.venv/
+venv/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
