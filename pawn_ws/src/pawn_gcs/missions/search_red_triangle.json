@@ -1,0 +1,50 @@
+{
+  "name": "search_red_triangle",
+  "description": "PAWN search primitive: take off, scan 360\u00b0 for the red triangle, advance and scan again; land when found",
+  "steps": [
+    {
+      "type": "takeoff"
+    },
+    {
+      "type": "record",
+      "on": true
+    },
+    {
+      "type": "scan",
+      "deg": 360,
+      "step": 30,
+      "dwell": 1.0,
+      "plugin": "red_triangle",
+      "stop_on_detect": true
+    },
+    {
+      "type": "wait_detection",
+      "plugin": "red_triangle",
+      "timeout": 2,
+      "on_timeout": "continue"
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 150
+    },
+    {
+      "type": "scan",
+      "deg": 360,
+      "step": 30,
+      "dwell": 1.0,
+      "plugin": "red_triangle",
+      "stop_on_detect": true
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "record",
+      "on": false
+    },
+    {
+      "type": "land"
+    }
+  ]
+}

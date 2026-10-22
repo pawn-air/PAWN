@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+recordings/
+*.pt
+.DS_Store
+build/
+dist/
+*.spec.bak
+recordings/_exports/

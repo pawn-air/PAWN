@@ -1,0 +1,228 @@
+{
+  "name": "photogrammetry_ring",
+  "description": "Inward-looking ring of 12 views around an object 1.5 m ahead (for SfM / 3D reconstruction tests)",
+  "steps": [
+    {
+      "type": "takeoff"
+    },
+    {
+      "type": "speed",
+      "cms": 30
+    },
+    {
+      "type": "record",
+      "on": true
+    },
+    {
+      "type": "hover",
+      "s": 1
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "move",
+      "dir": "right",
+      "cm": 80
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 30
+    },
+    {
+      "type": "hover",
+      "s": 1
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "move",
+      "dir": "right",
+      "cm": 80
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 30
+    },
+    {
+      "type": "hover",
+      "s": 1
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "move",
+      "dir": "right",
+      "cm": 80
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 30
+    },
+    {
+      "type": "hover",
+      "s": 1
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "move",
+      "dir": "right",
+      "cm": 80
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 30
+    },
+    {
+      "type": "hover",
+      "s": 1
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "move",
+      "dir": "right",
+      "cm": 80
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 30
+    },
+    {
+      "type": "hover",
+      "s": 1
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "move",
+      "dir": "right",
+      "cm": 80
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 30
+    },
+    {
+      "type": "hover",
+      "s": 1
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "move",
+      "dir": "right",
+      "cm": 80
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 30
+    },
+    {
+      "type": "hover",
+      "s": 1
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "move",
+      "dir": "right",
+      "cm": 80
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 30
+    },
+    {
+      "type": "hover",
+      "s": 1
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "move",
+      "dir": "right",
+      "cm": 80
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 30
+    },
+    {
+      "type": "hover",
+      "s": 1
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "move",
+      "dir": "right",
+      "cm": 80
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 30
+    },
+    {
+      "type": "hover",
+      "s": 1
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "move",
+      "dir": "right",
+      "cm": 80
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 30
+    },
+    {
+      "type": "hover",
+      "s": 1
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "move",
+      "dir": "right",
+      "cm": 80
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 30
+    },
+    {
+      "type": "record",
+      "on": false
+    },
+    {
+      "type": "land"
+    }
+  ]
+}

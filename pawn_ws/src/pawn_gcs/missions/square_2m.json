@@ -1,0 +1,73 @@
+{
+  "name": "square_2m",
+  "description": "2 m square at 1 m, photo at each corner",
+  "steps": [
+    {
+      "type": "takeoff"
+    },
+    {
+      "type": "move",
+      "dir": "up",
+      "cm": 20
+    },
+    {
+      "type": "speed",
+      "cms": 40
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 200
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 90
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 200
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 90
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 200
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 90
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 200
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "rotate",
+      "dir": "ccw",
+      "deg": 90
+    },
+    {
+      "type": "land"
+    }
+  ]
+}

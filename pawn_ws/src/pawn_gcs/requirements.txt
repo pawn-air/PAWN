@@ -1,0 +1,8 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+av>=12.0                      # PyAV: H.264 decode/encode, wheels bundle FFmpeg (Win/macOS/Linux)
+opencv-contrib-python>=4.8,<5 # vision plugins (contrib = ArUco + extras; OpenCV 5 dropped HOG/Haar people & face detectors)
+numpy>=1.24
+tomli>=2.0; python_version < "3.11"
+# optional:
+# ultralytics                 # enables the YOLO vision plugin

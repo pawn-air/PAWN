@@ -1,0 +1,11 @@
+{
+  "name": "PAWN Ground Control",
+  "short_name": "PAWN GCS",
+  "description": "Ground control station for DJI Tello search-and-rescue flights (PAWN).",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#080b10",
+  "theme_color": "#080b10",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

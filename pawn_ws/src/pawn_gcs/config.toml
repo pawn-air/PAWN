@@ -1,0 +1,54 @@
+# PAWN GCS static configuration.
+# Runtime settings (safety thresholds, RC tuning, video ...) are edited in the
+# web UI -> Settings tab and stored in data/settings.json.
+
+[server]
+host = "127.0.0.1"     # "0.0.0.0" to open the UI from a tablet/phone on the same network
+port = 8080
+open_browser = true
+
+[paths]
+data_dir = "data"
+recordings_dir = "recordings"
+missions_dir = "missions"
+plugin_dirs = ["plugins"]       # your own vision plugins / autonomy controllers
+
+# ---------------------------------------------------------------------------
+# Drones. A normal (non-EDU) Tello is always an access point at 192.168.10.1
+# and always sends state to :8890 and video to :11111 of the connected PC.
+# ---------------------------------------------------------------------------
+[[drones]]
+id = "tello1"
+name = "Tello 1"
+ip = "192.168.10.1"
+cmd_port = 8889
+bind_ip = "0.0.0.0"
+local_cmd_port = 8889
+state_port = 8890
+video_port = 11111
+color = "#38bdf8"
+home_x = 0.0
+home_y = 0.0
+home_yaw = 0.0
+
+# --- Tandem flight with two NORMAL Tellos ---------------------------------
+# Each Tello needs its own Wi-Fi adapter (e.g. a USB dongle). Both drones are
+# 192.168.10.1, so the OS routes by adapter: bind each drone to the IP that
+# its adapter got from that Tello's DHCP (usually 192.168.10.2 / .3 - check
+# with ipconfig / ifconfig). Ports can stay identical because the bind IPs differ.
+# On Linux you may also need per-interface routing (see docs/TELLO_NETWORK.md).
+#
+# [[drones]]
+# id = "tello1"
+# name = "Alpha"
+# ip = "192.168.10.1"
+# bind_ip = "192.168.10.2"     # adapter #1
+# color = "#38bdf8"
+#
+# [[drones]]
+# id = "tello2"
+# name = "Bravo"
+# ip = "192.168.10.1"
+# bind_ip = "192.168.10.3"     # adapter #2
+# color = "#f472b6"
+# home_y = 1.5                 # took off 1.5 m to the left of Alpha -> shared map

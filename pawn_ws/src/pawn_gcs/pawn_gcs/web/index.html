@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAWN Ground Control</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230b0f14' stroke='%2322d3ee' stroke-width='3'/%3E%3Cpath d='M9 16h14M16 9v14' stroke='%2322d3ee' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#080b10">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<!-- ============================== TOP BAR ============================== -->
+<header class="topbar">
+  <div class="brand"><span class="logo">◎</span><b>PAWN</b><span class="muted">GCS</span><span id="simBadge" class="badge warn hidden">SIM</span></div>
+  <nav id="fleet" class="fleet" aria-label="Drones"></nav>
+  <div class="topstats">
+    <span id="modeBadge" class="badge">MANUAL</span>
+    <span class="stat" title="Telemetry rate"><i>TLM</i><b id="tsHz">–</b></span>
+    <span class="stat" title="Video fps / bitrate"><i>VID</i><b id="tsVid">–</b></span>
+    <span class="stat" title="Wi-Fi SNR"><i>SNR</i><b id="tsSnr">–</b></span>
+    <span class="stat" title="Browser ⇄ GCS latency"><i>WS</i><b id="tsWs">–</b></span>
+    <span class="stat" title="Flight time"><i>T+</i><b id="tsFt">00:00</b></span>
+  </div>
+  <div class="topactions">
+    <button id="btnRecLog" class="btn sm" title="Start/stop flight log">● LOG</button>
+    <button id="btnRecVid" class="btn sm" title="Start/stop video recording">● REC</button>
+    <button id="btnSnap" class="btn sm" title="Snapshot (Y / F)">⧉ SNAP</button>
+    <button id="btnVoice" class="btn sm ghost" title="Voice call-outs (V)">🔇</button>
+    <button id="btnHelp" class="btn sm ghost" title="Keyboard & gamepad (?)">?</button>
+    <button id="btnEmergency" class="btn danger" title="Motors OFF immediately (Shift+Space)">EMERGENCY</button>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- ============================== LEFT: FLIGHT ============================== -->
+  <aside class="col left">
+    <section class="card">
+      <div class="card-h"><h2>Link</h2><span id="linkDot" class="dot"></span></div>
+      <div class="row gap">
+        <button id="btnConnect" class="btn primary grow">Connect</button>
+        <button id="btnDisconnect" class="btn grow">Disconnect</button>
+      </div>
+      <div id="linkInfo" class="kv small"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-h"><h2>Pre-flight</h2><button id="btnPreflight" class="btn xs ghost">refresh</button></div>
+      <ul id="preflight" class="checklist"></ul>
+    </section>
+
+    <section class="card">
+      <div class="card-h"><h2>Flight</h2>
+        <label class="switch" title="Send takeoff/land/flip/move to ALL drones (tandem)"><input type="checkbox" id="fleetSync"><span>Fleet sync</span></label>
+      </div>
+      <div class="grid3">
+        <button id="btnTakeoff" class="btn ok">⬆ Takeoff</button>
+        <button id="btnHover" class="btn warn">■ Hover</button>
+        <button id="btnLand" class="btn primary">⬇ Land</button>
+      </div>
+      <div class="sub">Step move <span class="muted">(cm)</span> <output id="stepOut">50</output></div>
+      <input type="range" id="stepCm" min="20" max="300" step="10" value="50">
+      <div class="pad">
+        <div class="dpad">
+          <button data-mv="forward" class="btn">▲</button>
+          <button data-mv="left" class="btn">◀</button>
+          <button data-mv="back" class="btn">▼</button>
+          <button data-mv="right" class="btn">▶</button>
+          <span class="dpad-label">XY</span>
+        </div>
+        <div class="dpad">
+          <button data-mv="up" class="btn">⤒</button>
+          <button data-rot="ccw" class="btn">↺</button>
+          <button data-mv="down" class="btn">⤓</button>
+          <button data-rot="cw" class="btn">↻</button>
+          <span class="dpad-label">Z/Ψ</span>
+        </div>
+      </div>
+      <div class="row gap wrap">
+        <span class="sub">Rotate°</span><input id="rotDeg" type="number" value="90" min="1" max="360" class="num">
+        <span class="sub">Speed</span><input id="spd" type="number" value="50" min="10" max="100" class="num">
+        <button id="btnSpd" class="btn xs">set</button>
+      </div>
+      <div class="row gap">
+        <span class="sub">Flip</span>
+        <button data-flip="f" class="btn xs">F</button><button data-flip="b" class="btn xs">B</button>
+        <button data-flip="l" class="btn xs">L</button><button data-flip="r" class="btn xs">R</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-h"><h2>Manual sticks</h2>
+        <label class="switch" title="Enable keyboard / gamepad / touch sticks"><input type="checkbox" id="armSticks" checked><span>Armed</span></label>
+      </div>
+      <div class="sticks">
+        <div class="stick" id="stickL"><div class="knob"></div><span>YAW · THR</span></div>
+        <div class="stick" id="stickR"><div class="knob"></div><span>ROLL · PITCH</span></div>
+      </div>
+      <div class="row gap"><button id="btnPadMap" class="btn xs" title="Map gamepad / RC transmitter axes">🎮 Map axes</button><span class="grow"></span></div>
+      <div id="padInfo" class="small muted">Keyboard: WASD move · ↑↓ alt · ←→ yaw · gamepad auto-detected</div>
+      <div class="sub">Stick limit <output id="rcMaxOut">60</output>%</div>
+      <input type="range" id="rcMax" min="10" max="100" step="5" value="60">
+    </section>
+  </aside>
+
+  <!-- ============================== CENTER ============================== -->
+  <section class="col center">
+    <div class="video-wrap" id="videoWrap">
+      <canvas id="video"></canvas>
+      <canvas id="hud"></canvas>
+      <div id="videoMsg" class="video-msg">No video — connect to a Tello (or run with <code>--sim</code>)</div>
+      <div class="video-tools">
+        <label class="chip"><input type="checkbox" id="hudOn" checked> HUD</label>
+        <label class="chip"><input type="checkbox" id="detOn" checked> Detections</label>
+        <label class="chip"><input type="checkbox" id="gridOn"> Grid</label>
+        <label class="chip" title="Click the video to mark a target (K). Marks from 2+ positions triangulate."><input type="checkbox" id="markOn"> ✚ Mark</label>
+        <button id="btnFull" class="chip">⛶</button>
+      </div>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="map">Map</button>
+      <button class="tab" data-tab="mission">Mission</button>
+      <button class="tab" data-tab="vision">Vision</button>
+      <button class="tab" data-tab="autonomy">Autonomy</button>
+      <button class="tab" data-tab="console">Console</button>
+      <button class="tab" data-tab="telemetry">Telemetry</button>
+      <button class="tab" data-tab="review">Flight review</button>
+      <button class="tab" data-tab="settings">Settings</button>
+    </div>
+
+    <div class="tabpanes">
+      <!-- MAP -->
+      <div class="pane active" id="pane-map">
+        <div class="map-toolbar">
+          <div class="seg"><button class="segb active" data-view="2d">2D</button><button class="segb" data-view="3d">3D</button></div>
+          <label class="chip"><input type="checkbox" id="mapFollow" checked> follow</label>
+          <label class="chip"><input type="checkbox" id="mapFence" checked> geofence</label>
+          <label class="chip"><input type="checkbox" id="mapPlan" checked> plan</label>
+          <label class="chip" title="Area swept by the camera"><input type="checkbox" id="mapCov" checked> coverage</label>
+          <label class="chip" title="Live return path along the flown trail"><input type="checkbox" id="mapRth" checked> RTH path</label>
+          <button id="mapFit" class="btn xs">fit</button>
+          <button id="mapHome" class="btn xs" title="Reset odometry / home to current position">reset home</button>
+          <button id="mapClear" class="btn xs ghost">clear</button>
+          <button id="btnBookmark" class="btn xs" title="Bookmark this position (M)">⚑ Bookmark</button>
+          <button id="btnRth" class="btn xs warn" title="Return home along the breadcrumb trail (Shift+H)">⌂ RTH</button>
+          <span class="muted small grow ta-r" id="mapInfo"></span>
+        </div>
+        <div class="map-body">
+          <div class="map-canvas"><canvas id="map"></canvas></div>
+          <div class="markers"><div id="sarSummary" class="sar"></div><div id="markerList"></div></div>
+        </div>
+      </div>
+
+      <!-- MISSION -->
+      <div class="pane" id="pane-mission">
+        <div class="mission-grid">
+          <div>
+            <div class="row gap wrap">
+              <input id="msName" class="grow" placeholder="Mission name" value="new_mission">
+              <select id="msLoad"><option value="">Load…</option></select>
+              <button id="msSave" class="btn xs">Save</button>
+              <button id="msDel" class="btn xs ghost">Delete</button>
+              <button id="msNew" class="btn xs ghost">New</button>
+            </div>
+            <div class="row gap wrap addrow">
+              <select id="msAddType"></select>
+              <button id="msAdd" class="btn xs primary">+ Add step</button>
+              <button id="msImport" class="btn xs ghost">Import JSON</button>
+              <button id="msExport" class="btn xs ghost">Export JSON</button>
+              <input type="file" id="msFile" accept=".json" hidden>
+            </div>
+            <details class="pattern-box" id="msPatternBox">
+              <summary>Search pattern generator <span class="muted small">(IAMSAR expanding square, parallel track, sector, orbit, scan grid)</span></summary>
+              <div class="row gap wrap"><select id="msPattern"></select><button id="msGen" class="btn xs primary">Generate → replace steps</button></div>
+              <div id="msPatternForm"></div>
+            </details>
+            <ol id="msSteps" class="steps"></ol>
+          </div>
+          <div class="mission-side">
+            <canvas id="msMap"></canvas>
+            <div id="msStats" class="kv small"></div>
+            <div class="row gap">
+              <button id="msRun" class="btn ok grow">▶ Run</button>
+              <button id="msPause" class="btn warn grow">❚❚ Pause</button>
+              <button id="msAbort" class="btn danger grow">■ Abort</button>
+            </div>
+            <div id="msStatus" class="mission-status small"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISION -->
+      <div class="pane" id="pane-vision">
+        <p class="small muted">Plugins run on the GCS on the latest frame (never a backlog). Drop your own <code>*.py</code> into <code>plugins/</code> — see <code>docs/PLUGINS.md</code>. Targets (★) drop markers on the map.</p>
+        <div id="visionList" class="plugin-grid"></div>
+      </div>
+
+      <!-- AUTONOMY -->
+      <div class="pane" id="pane-autonomy">
+        <p class="small muted">Controllers output rc sticks in <b>AUTO</b> mode. Any pilot stick input instantly takes over (MANUAL). Safety failsafes stay active.</p>
+        <div class="row gap wrap">
+          <select id="auSel"></select>
+          <button id="auApply" class="btn xs">Apply</button>
+          <button id="auEngage" class="btn ok xs">Engage AUTO</button>
+          <button id="auStop" class="btn warn xs">Back to MANUAL</button>
+        </div>
+        <p id="auDesc" class="small"></p>
+        <div id="auParams" class="form"></div>
+        <pre id="auDebug" class="debug"></pre>
+      </div>
+
+      <!-- CONSOLE -->
+      <div class="pane" id="pane-console">
+        <div class="console">
+          <div id="conLog" class="conlog"></div>
+          <div class="row gap">
+            <input id="conIn" class="grow mono" placeholder="Tello SDK command, e.g. 'battery?', 'go 100 0 50 40', 'curve 50 50 0 100 0 0 30'  (↑↓ history, Tab complete)" autocomplete="off" list="sdkList">
+            <datalist id="sdkList"></datalist>
+            <button id="conSend" class="btn primary xs">Send</button>
+            <label class="chip"><input type="checkbox" id="conFleet"> all drones</label>
+          </div>
+          <div id="conHelp" class="small muted"></div>
+        </div>
+      </div>
+
+      <!-- TELEMETRY -->
+      <div class="pane" id="pane-telemetry">
+        <div class="tele-grid">
+          <table class="tele" id="teleTable"></table>
+          <div>
+            <div class="charts" id="teleCharts"></div>
+            <div class="small muted">raw:</div><pre id="teleRaw" class="debug"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- REVIEW -->
+      <div class="pane" id="pane-review">
+        <div class="review-grid">
+          <div class="sessions" id="sessions"></div>
+          <div id="reviewBody" class="review-body muted">Select a flight session to replay telemetry, trajectory and video.</div>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="pane" id="pane-settings">
+        <div id="settingsForm" class="form settings"></div>
+        <div class="row gap"><button id="setSave" class="btn primary xs">Save</button><button id="setReset" class="btn ghost xs">Reset defaults</button>
+          <a class="btn ghost xs" href="/docs" target="_blank">API docs ↗</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== RIGHT: INSTRUMENTS ============================== -->
+  <aside class="col right">
+    <section class="card">
+      <div class="gauges">
+        <div class="gauge" id="gBat"><i>BATTERY</i><b>–</b><div class="bar"><div></div></div></div>
+        <div class="gauge" id="gAlt"><i>ALT (m)</i><b>–</b><small id="gTof">tof –</small></div>
+        <div class="gauge" id="gSpd"><i>SPEED (m/s)</i><b>–</b><small id="gVz">vz –</small></div>
+        <div class="gauge" id="gTemp"><i>TEMP (°C)</i><b>–</b><small id="gBaro">baro –</small></div>
+        <div class="gauge" id="gHdg"><i>HEADING</i><b>–</b><small id="gAtt">p – r –</small></div>
+        <div class="gauge" id="gDist"><i>RANGE (m)</i><b>–</b><small id="gTrip">trip –</small></div>
+      </div>
+    </section>
+    <section class="card">
+      <canvas id="adi" class="adi"></canvas>
+    </section>
+    <section class="card">
+      <div class="charts" id="miniCharts"></div>
+    </section>
+    <section class="card grow-card">
+      <div class="card-h"><h2>Events</h2>
+        <select id="evFilter" class="xs"><option value="">all</option><option value="warn">warn+</option><option value="cmd">commands</option></select>
+        <button id="evExport" class="btn xs ghost" title="Download log">⇩</button>
+      </div>
+      <div id="events" class="events"></div>
+    </section>
+  </aside>
+</main>
+
+<div id="toasts" class="toasts"></div>
+
+<dialog id="helpDlg" class="dlg">
+  <h3>Controls</h3>
+  <div class="help-grid">
+    <div><h4>Keyboard (sticks armed)</h4>
+      <table class="keys">
+        <tr><td><kbd>W</kbd><kbd>S</kbd></td><td>forward / back</td></tr>
+        <tr><td><kbd>A</kbd><kbd>D</kbd></td><td>left / right</td></tr>
+        <tr><td><kbd>↑</kbd><kbd>↓</kbd></td><td>up / down</td></tr>
+        <tr><td><kbd>←</kbd><kbd>→</kbd></td><td>yaw left / right</td></tr>
+        <tr><td><kbd>Shift</kbd></td><td>hold = 100% sticks (boost)</td></tr>
+        <tr><td><kbd>T</kbd></td><td>takeoff</td></tr>
+        <tr><td><kbd>L</kbd></td><td>land</td></tr>
+        <tr><td><kbd>Space</kbd></td><td>hover / abort mission &amp; AUTO</td></tr>
+        <tr><td><kbd>Shift</kbd>+<kbd>Space</kbd></td><td><b class="danger-t">EMERGENCY motor stop</b></td></tr>
+        <tr><td><kbd>F</kbd></td><td>snapshot</td></tr>
+        <tr><td><kbd>R</kbd></td><td>toggle video recording</td></tr>
+        <tr><td><kbd>M</kbd></td><td>bookmark position (+ snapshot)</td></tr>
+        <tr><td><kbd>K</kbd></td><td>toggle ✚ mark mode (click video = target ray)</td></tr>
+        <tr><td><kbd>Shift</kbd>+<kbd>H</kbd></td><td>return home along the trail (RTH)</td></tr>
+        <tr><td><kbd>V</kbd></td><td>voice call-outs on/off</td></tr>
+        <tr><td><kbd>1</kbd>…<kbd>4</kbd></td><td>select drone</td></tr>
+        <tr><td><kbd>?</kbd></td><td>this help</td></tr>
+      </table></div>
+    <div><h4>Gamepad (Mode 2, Xbox/PS layout)</h4>
+      <table class="keys">
+        <tr><td>Left stick</td><td>yaw (x) · throttle (y)</td></tr>
+        <tr><td>Right stick</td><td>roll (x) · pitch (y)</td></tr>
+        <tr><td>A / ✕</td><td>takeoff</td></tr>
+        <tr><td>B / ○</td><td>land</td></tr>
+        <tr><td>X / □</td><td>hover</td></tr>
+        <tr><td>Y / △</td><td>snapshot</td></tr>
+        <tr><td>RB</td><td>boost</td></tr>
+        <tr><td>LB + RB + Start</td><td><b class="danger-t">EMERGENCY</b></td></tr>
+      </table>
+      <h4>Touch</h4><p class="small">Drag the two on-screen sticks (tablet / phone on the same network: start with <code>--host 0.0.0.0</code>).</p>
+    </div>
+  </div>
+  <form method="dialog"><button class="btn primary">Close</button></form>
+</dialog>
+
+<dialog id="padDlg" class="dlg">
+  <h3>Gamepad / RC transmitter mapping</h3>
+  <p class="small muted">Connect a gamepad or an RC radio in USB-joystick mode (EdgeTX/OpenTX "USB Joystick"). Press <b>Learn</b>, then push only that stick fully <b>RIGHT</b> (roll / yaw) or <b>UP</b> (pitch / throttle). Mapping is saved in this browser.</p>
+  <div id="padAxes" class="pad-axes"></div>
+  <div id="padMapForm" class="form"></div>
+  <div class="row gap"><button id="padReset" class="btn xs ghost">Mode 2 defaults</button><span class="grow"></span>
+    <form method="dialog"><button class="btn primary xs">Done</button></form></div>
+</dialog>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>

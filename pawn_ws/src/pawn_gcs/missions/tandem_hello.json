@@ -1,0 +1,27 @@
+{
+  "name": "tandem_hello",
+  "description": "Run on all drones with 'Fleet sync' ON: synchronized climb, yaw and land",
+  "steps": [
+    {
+      "type": "takeoff"
+    },
+    {
+      "type": "move",
+      "dir": "up",
+      "cm": 50
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 360
+    },
+    {
+      "type": "move",
+      "dir": "down",
+      "cm": 50
+    },
+    {
+      "type": "land"
+    }
+  ]
+}

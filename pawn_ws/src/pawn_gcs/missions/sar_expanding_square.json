@@ -1,0 +1,204 @@
+{
+  "name": "sar_expanding_square",
+  "description": "IAMSAR expanding square (0.8 m first leg, 10 legs) at 1.1 m, short red-triangle check before each leg, land at the end.",
+  "steps": [
+    {
+      "type": "takeoff"
+    },
+    {
+      "type": "move",
+      "dir": "up",
+      "cm": 30
+    },
+    {
+      "type": "speed",
+      "cms": 40
+    },
+    {
+      "type": "wait_detection",
+      "plugin": "red_triangle",
+      "timeout": 0.6,
+      "on_timeout": "continue",
+      "note": "look"
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 80
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 90
+    },
+    {
+      "type": "wait_detection",
+      "plugin": "red_triangle",
+      "timeout": 0.6,
+      "on_timeout": "continue",
+      "note": "look"
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 80
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 90
+    },
+    {
+      "type": "wait_detection",
+      "plugin": "red_triangle",
+      "timeout": 0.6,
+      "on_timeout": "continue",
+      "note": "look"
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 160
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 90
+    },
+    {
+      "type": "wait_detection",
+      "plugin": "red_triangle",
+      "timeout": 0.6,
+      "on_timeout": "continue",
+      "note": "look"
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 160
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 90
+    },
+    {
+      "type": "wait_detection",
+      "plugin": "red_triangle",
+      "timeout": 0.6,
+      "on_timeout": "continue",
+      "note": "look"
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 240
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 90
+    },
+    {
+      "type": "wait_detection",
+      "plugin": "red_triangle",
+      "timeout": 0.6,
+      "on_timeout": "continue",
+      "note": "look"
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 240
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 90
+    },
+    {
+      "type": "wait_detection",
+      "plugin": "red_triangle",
+      "timeout": 0.6,
+      "on_timeout": "continue",
+      "note": "look"
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 320
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 90
+    },
+    {
+      "type": "wait_detection",
+      "plugin": "red_triangle",
+      "timeout": 0.6,
+      "on_timeout": "continue",
+      "note": "look"
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 320
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 90
+    },
+    {
+      "type": "wait_detection",
+      "plugin": "red_triangle",
+      "timeout": 0.6,
+      "on_timeout": "continue",
+      "note": "look"
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 400
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 90
+    },
+    {
+      "type": "wait_detection",
+      "plugin": "red_triangle",
+      "timeout": 0.6,
+      "on_timeout": "continue",
+      "note": "look"
+    },
+    {
+      "type": "move",
+      "dir": "forward",
+      "cm": 400
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 90
+    },
+    {
+      "type": "land"
+    }
+  ],
+  "pattern": {
+    "type": "expanding_square",
+    "params": {
+      "leg_m": 0.8,
+      "legs": 10,
+      "turn": "right",
+      "takeoff": true,
+      "alt_cm": 110,
+      "speed_cms": 40,
+      "detect_plugin": "red_triangle",
+      "finish": "land"
+    }
+  }
+}

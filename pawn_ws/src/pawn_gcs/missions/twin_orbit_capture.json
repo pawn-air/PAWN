@@ -1,0 +1,387 @@
+{
+  "name": "twin_orbit_capture",
+  "description": "Orbit an object 1.5 m in front of the drone while facing it (16 views) - photogrammetry capture for the 3D twin dataset.",
+  "steps": [
+    {
+      "type": "takeoff"
+    },
+    {
+      "type": "move",
+      "dir": "up",
+      "cm": 20
+    },
+    {
+      "type": "speed",
+      "cms": 40
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "snapshot"
+    },
+    {
+      "type": "hover",
+      "s": 0.5
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "move",
+      "dir": "left",
+      "cm": 59
+    },
+    {
+      "type": "rotate",
+      "dir": "cw",
+      "deg": 11
+    },
+    {
+      "type": "land"
+    }
+  ],
+  "pattern": {
+    "type": "orbit",
+    "params": {
+      "radius_m": 1.5,
+      "sides": 16,
+      "dwell_s": 0.5,
+      "snapshots": true,
+      "takeoff": true,
+      "alt_cm": 100,
+      "speed_cms": 40,
+      "detect_plugin": "",
+      "finish": "land"
+    }
+  }
+}
