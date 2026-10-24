@@ -55,15 +55,41 @@ def get_best_device() -> str:
     return "cpu"
 
 
+def resolve_weights_dir(preferred_dir: str = "weights") -> Path:
+    """Modellerin weights/ veya models/ klasöründe olup olmadığını dinamik çözer."""
+    p = Path(preferred_dir)
+    if (p / "yolo11n.pt").exists():
+        return p
+    candidates = [
+        Path(__file__).resolve().parent.parent / "weights",
+        Path(__file__).resolve().parent.parent / "models",
+        Path(__file__).resolve().parent / "weights",
+        Path("weights"),
+        Path("models"),
+        Path.home() / "Desktop/Machine Learning/models",
+    ]
+    for c in candidates:
+        if (c / "yolo11n.pt").exists():
+            return c
+    return p
+
+
 class HumanAnimalSARDetector:
-    def __init__(self, models_dir: str = "models") -> None:
-        self.models_dir = Path(models_dir)
+    def __init__(self, models_dir: str = "weights") -> None:
+        self.models_dir = resolve_weights_dir(models_dir)
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.device = get_best_device()
         print(f"[BİLGİ] Modül 1 v2 (İnsan/Hayvan & Çok Açılı SAR) donanımı: {self.device.upper()}")
 
-        self.det_model = YOLO(str(self.models_dir / "yolo11n.pt"))
-        self.pose_model = YOLO(str(self.models_dir / "yolo11n-pose.pt"))
+        det_path = self.models_dir / "yolo11n.pt"
+        pose_path = self.models_dir / "yolo11n-pose.pt"
+        if not det_path.exists():
+            raise FileNotFoundError(f"Model yolo11n.pt bulunamadı: {det_path}")
+        if not pose_path.exists():
+            raise FileNotFoundError(f"Model yolo11n-pose.pt bulunamadı: {pose_path}")
+
+        self.det_model = YOLO(str(det_path))
+        self.pose_model = YOLO(str(pose_path))
 
     @staticmethod
     def _analyze_human_posture(

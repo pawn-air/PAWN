@@ -53,14 +53,34 @@ def get_best_device() -> str:
     return "cpu"
 
 
+def resolve_model_file(filename_or_path: str) -> Path:
+    """Modellerin weights/ veya models/ klasöründe olup olmadığını dinamik çözer."""
+    p = Path(filename_or_path)
+    if p.exists():
+        return p
+    name = p.name
+    candidates = [
+        Path(__file__).resolve().parent.parent / "weights" / name,
+        Path(__file__).resolve().parent.parent / "models" / name,
+        Path(__file__).resolve().parent / "weights" / name,
+        Path("weights") / name,
+        Path("models") / name,
+        Path.home() / "Desktop/Machine Learning/models" / name,
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return p
+
+
 class StructuralCrackSARDetector:
     def __init__(
         self,
-        crack_seg_path: str = "models/crack_seg_yolo.pt",
-        heavy_damage_path: str = "models/heavy_structural_yolo11n.pt",
+        crack_seg_path: str = "weights/crack_seg_yolo.pt",
+        heavy_damage_path: str = "weights/heavy_structural_yolo11n.pt",
     ) -> None:
-        self.crack_seg_path = Path(crack_seg_path)
-        self.heavy_damage_path = Path(heavy_damage_path)
+        self.crack_seg_path = resolve_model_file(crack_seg_path)
+        self.heavy_damage_path = resolve_model_file(heavy_damage_path)
         if not self.crack_seg_path.exists():
             raise FileNotFoundError(f"Çatlak modeli bulunamadı: {self.crack_seg_path}")
 

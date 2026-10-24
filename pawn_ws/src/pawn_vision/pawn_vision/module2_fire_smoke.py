@@ -28,9 +28,29 @@ def get_best_device() -> str:
     return "cpu"
 
 
+def resolve_model_file(filename_or_path: str) -> Path:
+    """Modellerin weights/ veya models/ klasöründe olup olmadığını dinamik çözer."""
+    p = Path(filename_or_path)
+    if p.exists():
+        return p
+    name = p.name
+    candidates = [
+        Path(__file__).resolve().parent.parent / "weights" / name,
+        Path(__file__).resolve().parent.parent / "models" / name,
+        Path(__file__).resolve().parent / "weights" / name,
+        Path("weights") / name,
+        Path("models") / name,
+        Path.home() / "Desktop/Machine Learning/models" / name,
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return p
+
+
 class FireSmokeSARDetector:
-    def __init__(self, model_path: str = "models/fire_smoke_yolo.pt") -> None:
-        self.model_path = Path(model_path)
+    def __init__(self, model_path: str = "weights/fire_smoke_yolo.pt") -> None:
+        self.model_path = resolve_model_file(model_path)
         if not self.model_path.exists():
             raise FileNotFoundError(
                 f"Yangın/Duman model dosyası bulunamadı: {self.model_path}"

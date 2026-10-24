@@ -66,13 +66,32 @@ def get_best_device() -> str:
     return "cpu"
 
 
+def resolve_model_file(filename_or_path: str) -> Path:
+    """Modellerin weights/ veya models/ klasöründe olup olmadığını dinamik çözer."""
+    p = Path(filename_or_path)
+    if p.exists():
+        return p
+    name = p.name
+    candidates = [
+        Path(__file__).resolve().parent.parent / "weights" / name,
+        Path(__file__).resolve().parent.parent / "models" / name,
+        Path(__file__).resolve().parent / "weights" / name,
+        Path("weights") / name,
+        Path("models") / name,
+        Path.home() / "Desktop/Machine Learning/models" / name,
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return p
+
+
 class HazardSignSARDetector:
-    def __init__(self, model_path: str = "models/hazard_signs_yolo11n.pt") -> None:
-        self.model_path = Path(model_path)
+    def __init__(self, model_path: str = "weights/hazard_signs_yolo11n.pt") -> None:
+        self.model_path = resolve_model_file(model_path)
         if not self.model_path.exists():
             raise FileNotFoundError(
-                f"Tehlike levhaları modeli bulunamadı: {self.model_path}. "
-                f"Önce src/train_module3_hazard_signs.py çalıştırın."
+                f"Tehlike levhaları modeli bulunamadı: {self.model_path}."
             )
         self.device = get_best_device()
         print(f"[BİLGİ] Modül 3 (Kapsamlı Tehlike Levhaları) donanımı: {self.device.upper()}")
