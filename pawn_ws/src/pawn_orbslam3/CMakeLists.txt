@@ -62,6 +62,13 @@ target_link_libraries(orb_slam_node
     Eigen3::Eigen
 )
 
+# Preserve external dependency lookup after a normal (non-symlink) install.
+# Paths come from this machine's configured dependency checkout, not a developer path.
+set_target_properties(orb_slam_node PROPERTIES
+    INSTALL_RPATH "${ORB_SLAM3_DIR}/lib;${ORB_SLAM3_DIR}/Thirdparty/DBoW2/lib;${ORB_SLAM3_DIR}/Thirdparty/g2o/lib"
+    INSTALL_RPATH_USE_LINK_PATH TRUE
+)
+
 install(TARGETS orb_slam_node
     DESTINATION lib/${PROJECT_NAME}
 )

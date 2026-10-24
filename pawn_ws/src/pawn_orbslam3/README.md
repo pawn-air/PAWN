@@ -4,35 +4,81 @@
 
 ## Install and build
 
-Use Ubuntu 24.04, ROS 2 Jazzy, rosdep, colcon and a C++17 toolchain. Install ROS dependencies from the repository root:
+Target environment: Ubuntu 24.04 with [ROS 2 Jazzy installed](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html). The existing host used OpenCV 4.6.0 and Pangolin 0.9.3. The wrapper and patched ORB core were built on that host; a clean-machine installation of the entire recipe below has **not** been tested. Review ORB-SLAM3's GPL-3.0 license before redistribution.
+
+### ROS and system prerequisites
+
+From the PAWN repository root, in Bash:
+
+```bash
+export PAWN_REPO="$PWD"
+source /opt/ros/jazzy/setup.bash
+sudo apt update
+sudo apt install build-essential cmake git python3-colcon-common-extensions python3-rosdep \
+  libopencv-dev libeigen3-dev libboost-serialization-dev libssl-dev \
+  libgl1-mesa-dev libegl1-mesa-dev libglew-dev libepoxy-dev libx11-dev libjpeg-dev libpng-dev
+# First use only: skip init if /etc/ros/rosdep/sources.list.d/20-default.list already exists.
+sudo rosdep init
+rosdep update
+rosdep install --from-paths "$PAWN_REPO/pawn_ws/src/pawn_orbslam3" \
+  "$PAWN_REPO/pawn_ws/src/pawn_slam" --ignore-src --rosdistro jazzy -r -y
+```
+
+rosdep supplies ROS/Python dependencies including cv_bridge, rclpy, launch and RViz. Pangolin and the patched ORB-SLAM3 core are built separately below. No IMU, mapping, Gazebo or RealSense dependency is needed by this wrapper.
+
+### Pangolin and ORB-SLAM3
+
+Use **new, separate directories**, preserving any working ORB-SLAM3 installation. The [Pangolin v0.9.3 upstream instructions](https://github.com/stevenlovegrove/Pangolin/tree/v0.9.3#building) describe optional platform/video dependencies. The commands below install into a private prefix, without global library changes:
+
+```bash
+export PAWN_DEPS="$HOME/pawn-slam-deps"
+export PANGOLIN_PREFIX="$PAWN_DEPS/pangolin-install"
+mkdir -p "$PAWN_DEPS"
+git clone --recursive --branch v0.9.3 https://github.com/stevenlovegrove/Pangolin.git "$PAWN_DEPS/Pangolin"
+cmake -S "$PAWN_DEPS/Pangolin" -B "$PAWN_DEPS/Pangolin/build" \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PANGOLIN_PREFIX" \
+  -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+  -DBUILD_EXAMPLES=OFF -DBUILD_TOOLS=OFF -DBUILD_TESTS=OFF -DBUILD_PANGOLIN_PYTHON=OFF
+cmake --build "$PAWN_DEPS/Pangolin/build" -j2
+cmake --install "$PAWN_DEPS/Pangolin/build"
+export CMAKE_PREFIX_PATH="$PANGOLIN_PREFIX${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
+
+export ORB_SLAM3_DIR="$PAWN_DEPS/ORB_SLAM3"
+git clone https://github.com/UZ-SLAMLab/ORB_SLAM3.git "$ORB_SLAM3_DIR"
+git -C "$ORB_SLAM3_DIR" checkout --detach 4452a3c4ab75b1cde34e5505a36ec3f9edcdc4c4
+git -C "$ORB_SLAM3_DIR" apply --check "$PAWN_REPO/orbslam3_patch/orbslam3_clean.patch"
+git -C "$ORB_SLAM3_DIR" apply "$PAWN_REPO/orbslam3_patch/orbslam3_clean.patch"
+
+cmake -S "$ORB_SLAM3_DIR/Thirdparty/DBoW2" -B "$ORB_SLAM3_DIR/Thirdparty/DBoW2/build" -DCMAKE_BUILD_TYPE=Release
+cmake --build "$ORB_SLAM3_DIR/Thirdparty/DBoW2/build" -j2
+cmake -S "$ORB_SLAM3_DIR/Thirdparty/g2o" -B "$ORB_SLAM3_DIR/Thirdparty/g2o/build" -DCMAKE_BUILD_TYPE=Release
+cmake --build "$ORB_SLAM3_DIR/Thirdparty/g2o/build" -j2
+# Bundled Sophus is used through its headers; no separate install is needed for this core target.
+cmake -S "$ORB_SLAM3_DIR" -B "$ORB_SLAM3_DIR/build" -DCMAKE_BUILD_TYPE=Release
+cmake --build "$ORB_SLAM3_DIR/build" --target ORB_SLAM3 -j2
+tar -xf "$ORB_SLAM3_DIR/Vocabulary/ORBvoc.txt.tar.gz" -C "$ORB_SLAM3_DIR/Vocabulary"
+```
+
+The revision is also recorded in `orbslam3_patch/local_orbslam3_revision.txt`. The patch supplies C++17 compatibility, a LoopClosing index fix and the active-map snapshot API. Apply it once, before building. The core target avoids building upstream standalone examples. Reduce build parallelism if memory is limited.
+
+### Build the two ROS packages
+
+Keep the variables above in the same shell, or restore them in each new terminal:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-rosdep install --from-paths pawn_ws/src/pawn_orbslam3 pawn_ws/src/pawn_slam --ignore-src -r -y
-```
-
-Install Pangolin separately and build ORB-SLAM3 with its bundled DBoW2/g2o and upstream prerequisites (OpenCV, Eigen, Sophus). Pangolin must be discoverable through `CMAKE_PREFIX_PATH` or `Pangolin_DIR`. Review upstream GPL-3.0 licensing before redistribution.
-
-Use a **separate dependency checkout** at revision `4452a3c4ab75b1cde34e5505a36ec3f9edcdc4c4`, also recorded in `orbslam3_patch/local_orbslam3_revision.txt`. Before building that checkout, apply `orbslam3_patch/orbslam3_clean.patch` from this repository:
-
-```bash
-# Run in the separate ORB-SLAM3 dependency checkout; replace the patch path.
-git apply --check /path/to/PAWN-repo/orbslam3_patch/orbslam3_clean.patch
-git apply /path/to/PAWN-repo/orbslam3_patch/orbslam3_clean.patch
-# Follow upstream build instructions; extract Vocabulary/ORBvoc.txt if needed.
-```
-
-The patch adds C++17 compatibility, a LoopClosing index type fix and an active-map position snapshot API. Do not reapply it to an already patched working installation.
-
-```bash
-# From this repository's pawn_ws:
-export ORB_SLAM3_DIR=/path/to/separate/ORB_SLAM3
-colcon build --packages-select pawn_orbslam3 pawn_slam --symlink-install \
+# Set ORB_SLAM3_DIR to your patched checkout and CMAKE_PREFIX_PATH to your Pangolin prefix.
+cd "$PAWN_REPO/pawn_ws"
+colcon build --packages-select pawn_orbslam3 pawn_slam \
   --cmake-args -DORB_SLAM3_DIR="$ORB_SLAM3_DIR"
 source install/setup.bash
+colcon test --packages-select pawn_orbslam3 pawn_slam
+colcon test-result --verbose
 ```
 
-CMake accepts `-DORB_SLAM3_DIR=...` or the environment variable; its fallback is `~/PAWN/ORB_SLAM3`. Launch also accepts `orb_slam3_dir:=...`. That directory must contain built shared libraries and `Vocabulary/ORBvoc.txt`.
+Normal installation and optional `--symlink-install` are supported. The installed executable records library search paths derived from `ORB_SLAM3_DIR` and linked dependencies (including Pangolin); manual symlinks or an ORB-specific `LD_LIBRARY_PATH` export are unnecessary. Keep those dependency directories available. If they move, reconfigure and rebuild the wrapper against their new locations; this is not a self-contained redistributable bundle.
+
+CMake accepts `-DORB_SLAM3_DIR=...` or its environment variable; the fallback is `~/PAWN/ORB_SLAM3`. Launch accepts `orb_slam3_dir:=...` too: keep it consistent with the built dependency. The checkout must contain `lib/libORB_SLAM3.so`, the DBoW2/g2o shared libraries and `Vocabulary/ORBvoc.txt`. `CMAKE_PREFIX_PATH` (or CMake's `Pangolin_DIR`) is needed to discover a nonstandard Pangolin installation at build time. Source both ROS and this workspace's `install/setup.bash` before launch.
 
 ## Launch
 

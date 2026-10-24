@@ -1,12 +1,12 @@
-import os
 import csv
+import os
 
 import cv2
+from cv_bridge import CvBridge
 import rclpy
-
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
 
 
 class EurocCameraPublisher(Node):
@@ -126,11 +126,11 @@ def main(args=None):
 
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == '__main__':
