@@ -1,0 +1,83 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -14,12 +14,12 @@
+ 
+ # Check C++11 or C++0x support
+ include(CheckCXXCompilerFlag)
+-CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
++CHECK_CXX_COMPILER_FLAG("-std=c++17" COMPILER_SUPPORTS_CXX11)
+ CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
+ if(COMPILER_SUPPORTS_CXX11)
+-   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
++   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+    add_definitions(-DCOMPILEDWITHC11)
+-   message(STATUS "Using flag -std=c++11.")
++   message(STATUS "Using flag -std=c++17.")
+ elseif(COMPILER_SUPPORTS_CXX0X)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+    add_definitions(-DCOMPILEDWITHC0X)
+diff --git a/include/LoopClosing.h b/include/LoopClosing.h
+--- a/include/LoopClosing.h
++++ b/include/LoopClosing.h
+@@ -223,7 +223,7 @@
+     bool mbFixScale;
+ 
+ 
+-    bool mnFullBAIdx;
++    int mnFullBAIdx;
+ 
+ 
+ 
+diff --git a/include/System.h b/include/System.h
+--- a/include/System.h
++++ b/include/System.h
+@@ -175,6 +175,7 @@
+     // You can call this right after TrackMonocular (or stereo or RGBD)
+     int GetTrackingState();
+     std::vector<MapPoint*> GetTrackedMapPoints();
++    std::vector<Eigen::Vector3f> GetAllMapPointPositions();
+     std::vector<cv::KeyPoint> GetTrackedKeyPointsUn();
+ 
+     // For debugging
+diff --git a/src/System.cc b/src/System.cc
+--- a/src/System.cc
++++ b/src/System.cc
+@@ -1330,6 +1330,37 @@
+     return mTrackedMapPoints;
+ }
+ 
++vector<Eigen::Vector3f> System::GetAllMapPointPositions()
++{
++    vector<Eigen::Vector3f> positions;
++
++    Map* currentMap = mpAtlas->GetCurrentMap();
++
++    if (currentMap == nullptr)
++        return positions;
++
++    // Synchronize with map updates.
++    unique_lock<mutex> lock(currentMap->mMutexMapUpdate);
++
++    vector<MapPoint*> points = currentMap->GetAllMapPoints();
++
++    positions.reserve(points.size());
++
++    for (MapPoint* point : points)
++    {
++        if (point == nullptr || point->isBad())
++            continue;
++
++        Eigen::Vector3f position = point->GetWorldPos();
++
++        if (position.allFinite())
++            positions.push_back(position);
++    }
++
++    return positions;
++}
++
++
+ vector<cv::KeyPoint> System::GetTrackedKeyPointsUn()
+ {
+     unique_lock<mutex> lock(mMutexState);
