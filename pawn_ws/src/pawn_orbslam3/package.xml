@@ -13,6 +13,11 @@
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>octomap</depend>
+  <depend>octomap_msgs</depend>
   <depend>cv_bridge</depend>
 
   <depend>libopencv-dev</depend>

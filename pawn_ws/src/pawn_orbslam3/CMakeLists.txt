@@ -9,6 +9,11 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(octomap REQUIRED)
+find_package(octomap_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -50,6 +55,7 @@ ament_target_dependencies(orb_slam_node
     sensor_msgs
     geometry_msgs
     nav_msgs
+    std_msgs
     cv_bridge
 )
 
@@ -69,7 +75,30 @@ set_target_properties(orb_slam_node PROPERTIES
     INSTALL_RPATH_USE_LINK_PATH TRUE
 )
 
-install(TARGETS orb_slam_node
+add_executable(octomap_mapper_node
+    src/octomap_mapper_node.cpp
+)
+
+target_include_directories(octomap_mapper_node PRIVATE
+    ${OCTOMAP_INCLUDE_DIRS}
+)
+
+ament_target_dependencies(octomap_mapper_node
+    rclcpp
+    sensor_msgs
+    geometry_msgs
+    std_msgs
+    std_srvs
+    visualization_msgs
+    octomap_msgs
+)
+
+target_link_libraries(octomap_mapper_node
+    ${OCTOMAP_LIBRARIES}
+    Eigen3::Eigen
+)
+
+install(TARGETS orb_slam_node octomap_mapper_node
     DESTINATION lib/${PROJECT_NAME}
 )
 

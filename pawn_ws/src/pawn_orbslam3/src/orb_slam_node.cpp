@@ -11,7 +11,9 @@
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/path.hpp>
+#include <std_msgs/msg/float32.hpp>
 #include <cv_bridge/cv_bridge.hpp>
+#include <algorithm>
 
 #include <opencv2/core.hpp>
 #include <Eigen/Geometry>
@@ -39,6 +41,12 @@ public:
         declare_parameter<bool>("publish_path", true);
         publish_path_ = get_parameter("publish_path").as_bool();
         declare_parameter<std::string>("image_topic", "");
+        declare_parameter<bool>("convert_optical_to_flu", true);
+        declare_parameter<bool>("auto_metric_scale", true);
+        declare_parameter<double>("reference_scene_depth", 2.5);
+        convert_optical_to_flu_ = get_parameter("convert_optical_to_flu").as_bool();
+        auto_metric_scale_ = get_parameter("auto_metric_scale").as_bool();
+        reference_scene_depth_ = static_cast<float>(get_parameter("reference_scene_depth").as_double());
 
         const auto vocabulary =
             get_parameter("vocabulary_path").as_string();
@@ -82,6 +90,11 @@ public:
         cloud_pub_ =
             create_publisher<sensor_msgs::msg::PointCloud2>(
                 prefix + "/slam/map_points", 10
+            );
+
+        scale_pub_ =
+            create_publisher<std_msgs::msg::Float32>(
+                prefix + "/slam/scale", 10
             );
 
         local_frame_ = "drone_" + std::to_string(drone_id) + "/slam_map";
@@ -149,14 +162,36 @@ private:
 
             // Publish poses only when tracking is successful
             if (state != 2) {
+                if (state == 3) {
+                    // Tracking lost/reset -> recalibrate scale on recovery
+                    scale_initialized_ = false;
+                }
                 return;
             }
 
-            // 4. Camera optical pose in arbitrary-scale local SLAM coordinates
+            // 4. Camera optical pose in local SLAM coordinates
             Sophus::SE3f Twc = Tcw.inverse();
 
-            Eigen::Vector3f position = Twc.translation();
-            Eigen::Quaternionf q = Twc.unit_quaternion();
+            Eigen::Vector3f raw_position = Twc.translation();
+
+            // Detect map reset if camera jumps back near origin after moving far
+            if (scale_initialized_ && last_raw_position_.norm() > 1.5f && raw_position.norm() < 0.05f) {
+                scale_initialized_ = false;
+                path_.poses.clear();
+                RCLCPP_WARN(get_logger(), "SLAM map reset detected -> recalibrating metric scale...");
+            }
+            last_raw_position_ = raw_position;
+
+            // Calibrate monocular scale once initial map points are available
+            if (auto_metric_scale_ && !scale_initialized_) {
+                calibrateMetricScale(raw_position);
+            }
+
+            Eigen::Vector3f scaled_pos = raw_position * metric_scale_;
+            Eigen::Vector3f position = opticalToFluPosition(scaled_pos);
+            Eigen::Quaternionf q = convert_optical_to_flu_
+                ? opticalToFluOrientation(Twc.rotationMatrix())
+                : Twc.unit_quaternion();
 
             geometry_msgs::msg::PoseStamped pose;
 
@@ -210,6 +245,72 @@ private:
     }
 
 
+    void calibrateMetricScale(const Eigen::Vector3f &raw_camera_pos)
+    {
+        auto points = slam_->GetAllMapPointPositions();
+        if (points.size() < 25) {
+            return;
+        }
+
+        std::vector<float> dists;
+        dists.reserve(points.size());
+        for (const auto &p : points) {
+            if (!p.allFinite()) continue;
+            float d = (p - raw_camera_pos).norm();
+            if (d > 1e-4f && std::isfinite(d)) {
+                dists.push_back(d);
+            }
+        }
+
+        if (dists.size() < 20) {
+            return;
+        }
+
+        std::nth_element(dists.begin(), dists.begin() + dists.size() / 2, dists.end());
+        float median_depth = dists[dists.size() / 2];
+
+        if (median_depth > 1e-3f) {
+            metric_scale_ = std::clamp(reference_scene_depth_ / median_depth, 0.02f, 50.0f);
+            scale_initialized_ = true;
+            path_.poses.clear();
+
+            std_msgs::msg::Float32 scale_msg;
+            scale_msg.data = metric_scale_;
+            scale_pub_->publish(scale_msg);
+
+            RCLCPP_INFO(
+                get_logger(),
+                "Monocular scale calibrated: raw median depth=%.3f -> target=%.2f m (metric_scale=%.4f)",
+                median_depth,
+                reference_scene_depth_,
+                metric_scale_
+            );
+        }
+    }
+
+    Eigen::Vector3f opticalToFluPosition(const Eigen::Vector3f &opt) const
+    {
+        if (!convert_optical_to_flu_) {
+            return opt;
+        }
+        // Optical (X: right, Y: down, Z: forward) -> ROS FLU (X: forward, Y: left, Z: up)
+        return Eigen::Vector3f(opt.z(), -opt.x(), -opt.y());
+    }
+
+    Eigen::Quaternionf opticalToFluOrientation(const Eigen::Matrix3f &R_wc_opt) const
+    {
+        // R_flu_opt transforms vectors from optical frame to FLU frame:
+        // [x_flu; y_flu; z_flu] = [0 0 1; -1 0 0; 0 -1 0] * [x_opt; y_opt; z_opt]
+        Eigen::Matrix3f R_flu_opt;
+        R_flu_opt <<  0.0f,  0.0f, 1.0f,
+                     -1.0f,  0.0f, 0.0f,
+                      0.0f, -1.0f, 0.0f;
+        Eigen::Matrix3f R_body_flu = R_flu_opt * R_wc_opt * R_flu_opt.transpose();
+        Eigen::Quaternionf q(R_body_flu);
+        q.normalize();
+        return q;
+    }
+
     void publishMapPoints(
         const builtin_interfaces::msg::Time &stamp)
     {
@@ -229,9 +330,10 @@ private:
         sensor_msgs::PointCloud2Iterator<float> iter_z(cloud, "z");
 
         for (const auto &p : points) {
-            *iter_x = p.x();
-            *iter_y = p.y();
-            *iter_z = p.z();
+            Eigen::Vector3f pt = opticalToFluPosition(p * metric_scale_);
+            *iter_x = pt.x();
+            *iter_y = pt.y();
+            *iter_z = pt.z();
 
             ++iter_x;
             ++iter_y;
@@ -243,8 +345,9 @@ private:
         if (frame_count_ % 100 == 0) {
             RCLCPP_INFO(
                 get_logger(),
-                "Full map published: %zu points",
-                points.size()
+                "Full map published: %zu points (scale=%.3f)",
+                points.size(),
+                metric_scale_
             );
         }
     }
@@ -263,9 +366,18 @@ private:
     rclcpp::Publisher<
         sensor_msgs::msg::PointCloud2>::SharedPtr cloud_pub_;
 
+    rclcpp::Publisher<
+        std_msgs::msg::Float32>::SharedPtr scale_pub_;
+
     nav_msgs::msg::Path path_;
     std::string local_frame_;
     bool publish_path_ = true;
+    bool convert_optical_to_flu_ = true;
+    bool auto_metric_scale_ = true;
+    bool scale_initialized_ = false;
+    float reference_scene_depth_ = 2.5f;
+    float metric_scale_ = 1.0f;
+    Eigen::Vector3f last_raw_position_{0.0f, 0.0f, 0.0f};
 
     size_t frame_count_ = 0;
     size_t image_count_ = 0;

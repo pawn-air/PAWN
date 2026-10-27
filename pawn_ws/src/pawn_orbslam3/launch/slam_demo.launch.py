@@ -41,17 +41,34 @@ def start(context):
                                   **({'dataset_path': dataset} if source == 'euroc'
                                      else {'video_path': video})}])
     actions = [slam, TimerAction(period=15.0, actions=[publisher])]
+    if get('enable_mapping').lower() in ('true', '1', 'yes'):
+        mapper = Node(
+            package='pawn_orbslam3',
+            executable='octomap_mapper_node',
+            name='octomap_mapper',
+            namespace=f'drone_{drone}',
+            output='screen',
+            parameters=[{
+                'drone_id': drone,
+                'resolution': float(get('octomap_resolution')),
+            }]
+        )
+        actions.insert(1, mapper)
     if get('rviz').lower() in ('true','1','yes'):
         rviz_cfg = os.path.join(get_package_share_directory('pawn_slam'), 'rviz/pawn_slam.rviz')
         actions.insert(1, Node(package='rviz2', executable='rviz2', arguments=['-d', rviz_cfg, '-f', f'drone_{drone}/slam_map'],
                                remappings=[(f'/drone_1/{suffix}', f'/drone_{drone}/{suffix}')
-                                           for suffix in ('camera/image_raw', 'slam/pose', 'path', 'slam/map_points')], output='screen'))
+                                           for suffix in ('camera/image_raw', 'slam/pose', 'path', 'slam/map_points',
+                                                          'slam_points_filtered', 'occupied_cells_vis_array',
+                                                          'map/frontier_markers', 'octomap_binary')], output='screen'))
     return actions
 
 
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('publish_path', default_value='true'),
+        DeclareLaunchArgument('enable_mapping', default_value='true', description='Start Kisi B OctoMap 3D mapper node'),
+        DeclareLaunchArgument('octomap_resolution', default_value='0.08', description='Octree voxel size in meters'),
         DeclareLaunchArgument('camera_source', default_value='euroc'),
         DeclareLaunchArgument('drone_id', default_value='1'),
         DeclareLaunchArgument('dataset_path', default_value='', description='Required for EuRoC: absolute MH01 directory'),
