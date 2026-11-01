@@ -21,15 +21,17 @@ def call(base, path, body=None):
         return json.loads(r.read())
 
 
-async def watch_events(ws_url):
+async def watch(ws_url):
+    """Print every command reply, drone message and event the GCS publishes."""
     async with websockets.connect(ws_url) as ws:
         async for raw in ws:
             msg = json.loads(raw)
-            items = msg["data"] if msg["topic"] == "batch" else [msg]
-            for it in items:
-                if it.get("topic") == "event":
-                    d = it["data"]
-                    print(f"  [{d.get('level')}] {d.get('drone') or '-'}: {d['msg']}")
+            for it in msg["data"] if msg["topic"] == "batch" else [msg]:
+                d = it.get("data", {})
+                if it.get("topic") == "command":
+                    print(f"  > {d['cmd']}  <  {d['resp']}  ({d['dt'] * 1000:.0f} ms)")
+                elif it.get("topic") in ("event", "tello"):
+                    print(f"  [{it['topic']}] {d.get('drone') or '-'}: {d['msg']}")
 
 
 async def main():
@@ -38,22 +40,11 @@ async def main():
     ap.add_argument("--drone", default="sim1")
     a = ap.parse_args()
     base = a.url + "/api"
-    watcher = asyncio.create_task(watch_events(a.url.replace("http", "ws") + "/ws"))
-
-    print("status:", [d["id"] for d in call(base, "/status")["drones"]])
-    print("preflight blockers:", call(base, f"/drones/{a.drone}/preflight")["blockers"])
-    mission = {"name": "api_demo", "steps": [
-        {"type": "takeoff"}, {"type": "move", "dir": "forward", "cm": 100},
-        {"type": "rotate", "dir": "ccw", "deg": 180}, {"type": "move", "dir": "forward", "cm": 100},
-        {"type": "snapshot"}, {"type": "land"}]}
-    print("preview:", {k: v for k, v in call(base, "/missions/preview", mission).items() if k != "points"})
-    call(base, f"/drones/{a.drone}/mission/start", mission)
-    while True:
-        await asyncio.sleep(1)
-        m = [d for d in call(base, "/status")["drones"] if d["id"] == a.drone][0]["mission"]
-        print(f"mission: {m['state']} step {m['step'] + 1}/{m['total']}")
-        if m["state"] not in ("running", "paused"):
-            break
+    watcher = asyncio.create_task(watch(a.url.replace("http", "ws") + "/ws"))
+    print("drones:", [d["id"] for d in call(base, "/status")["drones"]])
+    for text in ("takeoff", "forward 100", "ccw 180", "forward 100", "land"):
+        await asyncio.to_thread(call, base, f"/drones/{a.drone}/command", {"text": text})
+    await asyncio.sleep(1)
     watcher.cancel()
 
 

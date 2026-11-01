@@ -1,4 +1,8 @@
-"""GcsApp: wires every subsystem together. Owned by the web server's lifespan."""
+"""GcsApp: wires the subsystems together. Owned by the web server's lifespan.
+
+Add a new backend module here: give it the bus (``self.bus``) and/or a node
+(``node.frame_listeners`` for video frames) and expose it in server.py.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -9,20 +13,13 @@ from collections import deque
 
 import cv2
 
-from .autonomy import AutonomyManager
 from .config import AppConfig, Settings
 from .core.bus import EventBus
-from .core.coverage import CoverageGrid
-from .core.mapstore import MapStore
-from .core.mission import MissionExecutor, MissionStore
-from .core.navigation import Navigator
 from .core.node import DroneNode
 from .core.recorder import Recorder, SessionIndex
-from .core.safety import SafetyMonitor
-from .vision.manager import VisionManager
 
 log = logging.getLogger("pawn.app")
-VERSION = "2.0.0"
+VERSION = "3.0.0"
 
 
 class GcsApp:
@@ -30,26 +27,21 @@ class GcsApp:
         self.cfg = cfg
         self.bus = EventBus()
         self.settings = Settings(cfg.data_dir / "settings.json")
-        self.map = MapStore(self.bus, self.settings)
-        self.coverage = CoverageGrid(self.bus, self.settings)
-        self.missions = MissionStore(cfg.missions_dir)
         self.sessions = SessionIndex(cfg.recordings_dir)
-        self.vision = VisionManager(cfg.extra_plugin_dirs, cfg.data_dir / "vision.json", self.map)
-        self.autonomy = AutonomyManager(cfg.extra_plugin_dirs)
         self.nodes: dict[str, DroneNode] = {}
         self.sims: list = []
         self.clients = 0
-        self.events: deque = deque(maxlen=1000)
+        self.events: deque = deque(maxlen=2000)   # everything the log panel shows, for late joiners
         self.started = time.time()
         self._jpeg: dict[str, tuple[int, bytes]] = {}
         self._jpeg_lock = threading.Lock()
-        self.bus.subscribe("event", lambda t, d: self.events.append({**d, "t": time.time()}))
+        self.bus.subscribe("event", lambda t, d: self.events.append({"type": "event", **d, "t": time.time()}))
+        self.bus.subscribe("tello", lambda t, d: self.events.append({"type": "tello", **d}))
         self.bus.subscribe("command", self._log_cmd)
 
     def _log_cmd(self, t, d):
         if not d.get("cmd", "").startswith("rc "):
-            self.events.append({"drone": d["drone"], "level": "cmd", "src": "cmd", "t": time.time(),
-                                "msg": f"> {d['cmd']}  <  {d.get('resp') or 'timeout'}  ({d.get('dt', 0) * 1000:.0f} ms)"})
+            self.events.append({"type": "command", **d})
 
     async def start(self) -> None:
         self.bus.bind_loop(asyncio.get_running_loop())
@@ -62,16 +54,8 @@ class GcsApp:
                 self.sims.append(sim)
         for d in self.cfg.drones:
             node = DroneNode(d, self.bus, self.settings)
-            node.mission = MissionExecutor(node)
-            node.safety = SafetyMonitor(node, self.settings, lambda: self.clients)
             node.recorder = Recorder(node, self.cfg.recordings_dir, self.settings)
-            node.autonomy = self.autonomy
-            node.map = self.map
-            node.coverage = self.coverage
-            node.nav = Navigator(node, self.map, self.settings)
             await node.start()
-            node.safety.start()
-            self.vision.attach(node)
             self.nodes[d.id] = node
         self.bus.event(f"PAWN GCS {VERSION} ready - {len(self.nodes)} drone(s)" + (" [SIMULATION]" if self.cfg.sim else ""),
                        "success")
@@ -85,7 +69,6 @@ class GcsApp:
                 n.recorder.stop_log()
                 n.recorder.flush()
             await n.stop()
-        self.vision.stop()
         for s in self.sims:
             await s.stop()
 

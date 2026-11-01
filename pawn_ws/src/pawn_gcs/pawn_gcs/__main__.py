@@ -32,7 +32,7 @@ def main() -> None:
         cfg.host = a.host
     if a.port:
         cfg.port = a.port
-    for p in (cfg.data_dir, cfg.recordings_dir, cfg.missions_dir):
+    for p in (cfg.data_dir, cfg.recordings_dir):
         p.mkdir(parents=True, exist_ok=True)
 
     url = f"http://{'127.0.0.1' if cfg.host in ('0.0.0.0', '::') else cfg.host}:{cfg.port}"

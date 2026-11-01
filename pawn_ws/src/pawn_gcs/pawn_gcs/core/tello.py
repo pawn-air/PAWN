@@ -1,7 +1,6 @@
 """Low-level DJI Tello UDP link (SDK 1.3 / 2.0 text protocol).
 
-This is the "drone I/O" layer: it knows nothing about the UI, missions or
-safety. It only:
+This is the "drone I/O" layer: it knows nothing about the UI. It only:
   * sends text commands to <ip>:8889 and matches the "ok"/"error"/value reply,
   * fires-and-forgets ``rc`` stick packets,
   * receives the 10 Hz state string on :8890 and parses it,
@@ -69,6 +68,10 @@ def parse_state(raw: str) -> dict[str, float]:
     return out
 
 
+def _is_text(data: bytes) -> bool:
+    return bool(data) and all(32 <= b < 127 or b in (9, 10, 13) for b in data)
+
+
 @dataclass
 class CommandResult:
     cmd: str
@@ -115,19 +118,24 @@ class TelloLink:
     def __init__(self, cfg: DroneConfig,
                  on_state: Callable[[dict, str], None],
                  on_video: Callable[[bytes], None],
-                 on_command: Callable[[CommandResult], None] | None = None) -> None:
+                 on_command: Callable[[CommandResult], None] | None = None,
+                 on_unsolicited: Callable[[str], None] | None = None) -> None:
         self.cfg = cfg
         self.on_state = on_state
         self.on_video = on_video
         self.on_command = on_command
+        self.on_unsolicited = on_unsolicited  # text the drone sent while no command was waiting
+        self.on_wire: Callable[[str, str], None] | None = None  # ("TX"|"RX", text) for every command-port datagram
         self._cmd_tr: asyncio.DatagramTransport | None = None
         self._transports: list[asyncio.BaseTransport] = []
         self._replies: asyncio.Queue[str] = asyncio.Queue()
         self._lock = asyncio.Lock()
         self._pending: str | None = None
-        self.last_state_t = 0.0
-        self.last_video_t = 0.0
-        self.last_tx_t = 0.0
+        self._busy_t = 0.0
+        # "never" (time.monotonic() can start near 0 at process start, so 0.0 would read as "just now")
+        self.last_state_t = float("-inf")
+        self.last_video_t = float("-inf")
+        self.last_tx_t = float("-inf")
         self.state_count = 0
         self.video_bytes = 0
         self.open_error: str | None = None
@@ -165,9 +173,21 @@ class TelloLink:
 
     # -------------------------------------------------------------- receivers
     def _on_reply(self, data: bytes, addr) -> None:
-        txt = data.decode("utf-8", "replace").strip()
+        if not _is_text(data):
+            # binary packet (Tello app protocol, 0xCC...) - never a reply to an SDK text command
+            txt = "binary " + data.hex()
+            if self.on_wire:
+                self.on_wire("RX", txt)
+            if self.on_unsolicited:
+                self.on_unsolicited(f"binary packet, {len(data)} bytes")
+            return
+        txt = data.decode("ascii").strip()
+        if self.on_wire:
+            self.on_wire("RX", txt)
         if self._pending is None:
             log.debug("[%s] unsolicited reply: %r", self.cfg.id, txt)
+            if self.on_unsolicited:
+                self.on_unsolicited(txt)
             return
         self._replies.put_nowait(txt)
 
@@ -190,6 +210,8 @@ class TelloLink:
         if self._cmd_tr:
             self._cmd_tr.sendto(cmd.encode("ascii"), (self.cfg.ip, self.cfg.cmd_port))
             self.last_tx_t = time.monotonic()
+            if self.on_wire:
+                self.on_wire("TX", cmd)
 
     async def command(self, cmd: str, timeout: float | None = None, retries: int = 0, quiet: bool = False) -> CommandResult:
         """Send a command and wait for its reply. Serialised: Tello handles one at a time."""
@@ -198,10 +220,13 @@ class TelloLink:
         if timeout is None:
             timeout = QUERY_TIMEOUT if head.endswith("?") else TIMEOUTS.get(head, 8.0)
         async with self._lock:
+            self._busy_t = time.monotonic()
             res = None
             for attempt in range(retries + 1):
-                while not self._replies.empty():  # drop stale late replies
-                    self._replies.get_nowait()
+                while not self._replies.empty():  # late replies to an earlier command
+                    late = self._replies.get_nowait()
+                    if self.on_unsolicited:
+                        self.on_unsolicited(late)
                 t0 = time.monotonic()
                 self._pending = cmd
                 self.send_raw(cmd)
@@ -222,3 +247,8 @@ class TelloLink:
     @property
     def busy(self) -> bool:
         return self._lock.locked()
+
+    @property
+    def busy_for(self) -> float:
+        """Seconds the current command has been waiting for its reply (0 when idle)."""
+        return time.monotonic() - self._busy_t if self.busy else 0.0

@@ -1,7 +1,7 @@
 """H.264 video pipeline: UDP packets -> PyAV decoder thread -> latest frame.
 
 Consumers never block the decoder: they read ``FrameStore.latest()`` (or wait
-for the next frame id), so a slow vision plugin or a slow browser can't add
+for the next frame id), so a slow frame consumer or a slow browser can't add
 latency to everyone else.
 """
 from __future__ import annotations

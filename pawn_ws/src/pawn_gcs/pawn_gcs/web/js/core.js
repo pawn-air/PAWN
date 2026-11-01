@@ -40,15 +40,13 @@ export async function api(path, body, method) {
 const HIST = 600; // ~60 s at 10 Hz
 export const store = {
   drones: {},         // id -> status (from server)
-  tel: {},            // id -> latest {state, odom, t}
-  hist: {},           // id -> {t:[], alt:[], bat:[], spd:[], temp:[], vz:[]}
-  det: {},            // id -> {plugin -> detection}
+  tel: {},            // id -> latest {state, raw, rc, t} exactly as the drone sent it
+  hist: {},           // id -> {field: [values]} for every state field
+  fieldMeta: {},      // field -> {unit, label} (from /api/meta)
   selected: null,
   settings: {},
-  meta: {},
   sim: false,
   wsLatency: null,
-  map: { markers: [], clouds: {} },
 };
 export const sel = () => store.drones[store.selected] || null;
 export const selId = () => store.selected;
@@ -60,11 +58,9 @@ export function select(id) {
   emit('select', id);
 }
 
-function pushHist(id, st, od) {
-  const hh = (store.hist[id] ||= { t: [], alt: [], bat: [], spd: [], temp: [], vz: [], tof: [] });
-  const now = performance.now() / 1000;
-  const vals = { t: now, alt: od.z, bat: st.bat, spd: od.speed, temp: st.temph, vz: -(st.vgz || 0) / 10, tof: (st.tof || 0) / 100 };
-  for (const k in vals) { hh[k].push(vals[k]); if (hh[k].length > HIST) hh[k].shift(); }
+function pushHist(id, st) {
+  const hh = (store.hist[id] ||= {});
+  for (const k in st) { const a = (hh[k] ||= []); a.push(st[k]); if (a.length > HIST) a.shift(); }
 }
 
 // ---------------------------------------------------------------- websocket
@@ -76,25 +72,10 @@ function handle(topic, d) {
   switch (topic) {
     case 'telemetry':
       store.tel[d.drone] = d;
-      if (store.drones[d.drone]) Object.assign(store.drones[d.drone], d.status);
-      pushHist(d.drone, d.state, d.odom);
+      pushHist(d.drone, d.state);
       break;
     case 'link':
       store.drones[d.drone] = { ...(store.drones[d.drone] || {}), ...d };
-      break;
-    case 'mode':
-      if (store.drones[d.drone]) store.drones[d.drone].mode = d.mode;
-      break;
-    case 'detections':
-      (store.det[d.drone] ||= {})[d.plugin] = d;
-      break;
-    case 'map':
-      if (d.type === 'marker') {
-        const i = store.map.markers.findIndex(m => m.id === d.marker.id);
-        if (i >= 0) store.map.markers[i] = d.marker; else store.map.markers.push(d.marker);
-      } else if (d.type === 'marker_removed') store.map.markers = store.map.markers.filter(m => m.id !== d.id);
-      else if (d.type === 'cleared') store.map = { markers: [], clouds: {} };
-      else if (d.type === 'cloud') store.map.clouds[d.name] = { points: d.points, color: d.color };
       break;
   }
   emit(topic, d);
@@ -126,16 +107,11 @@ export function connectWS() {
 setInterval(() => { if (wsOpen) { pingT = performance.now(); wsSend({ type: 'ping', t: pingT }); } }, 2000);
 
 // ---------------------------------------------------------------- commands
-export async function sendCmd(text, opts = {}) {
-  const id = opts.drone || store.selected;
+export async function sendCmd(text, source = 'ui') {
+  const id = store.selected;
   if (!id) return;
-  try {
-    if (opts.fleet) {
-      const r = await api('/fleet/command', { text });
-      return r;
-    }
-    return await api(`/drones/${id}/command`, { text, source: 'ui' });
-  } catch (e) { toast(`${text}: ${e.message}`, 'error'); }
+  try { return await api(`/drones/${id}/command`, { text, source }); }
+  catch (e) { toast(`${text}: ${e.message}`, 'error'); }
 }
 
 // ---------------------------------------------------------------- toasts

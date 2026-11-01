@@ -2,7 +2,7 @@
 
 Renders an indoor "building" (room with walls, pillars, a doorway frame), a red
 triangle target, an ArUco marker and a person-like figure from the drone's
-pose, so every vision plugin can be exercised without hardware.
+pose, so the video path can be exercised without hardware.
 Pure NumPy + OpenCV; painter's algorithm + near-plane clipping.
 """
 from __future__ import annotations

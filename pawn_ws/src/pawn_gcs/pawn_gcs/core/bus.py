@@ -1,20 +1,17 @@
 """Tiny async publish/subscribe event bus.
 
-Every subsystem (driver, safety, missions, plugins, recorder, web server)
+Every subsystem (driver, recorder, web server, future modules)
 talks through this bus, so new modules can be added without touching the
-existing ones. Publishing is thread-safe: worker threads (video decoder,
-vision plugins) can publish too.
+existing ones. Publishing is thread-safe: worker threads (e.g. the video
+decoder) can publish too.
 
 Topics used across the app (payloads are plain dicts, JSON-serialisable):
-    telemetry      {"drone": id, "state": {...}, "odom": {...}}
+    telemetry      {"drone": id, "state": {...parsed}, "raw": "pitch:0;roll:0;...", "rc": [lr, fb, ud, yw], "t": unix}
+    command        {"drone": id, "cmd": str, "resp": str|None, "ok": bool, "dt": float, "t": unix}
+    tello          {"drone": id, "msg": str, "t": unix}   text the drone sent outside a command reply
     event          {"drone": id|None, "level": "info|warn|error|success", "msg": str, "src": str}
-    command        {"drone": id, "cmd": str, "resp": str|None, "ok": bool, "dt": float}
-    link           {"drone": id, "connected": bool, ...}
-    detections     {"drone": id, "plugin": name, "items": [...], "frame_id": int}
-    mission        {"drone": id, "status": ..., "step": int, ...}
-    mode           {"drone": id, "mode": "MANUAL|MISSION|AUTO"}
-    map            {"type": "points|marker|pose", ...}
-    recording      {"drone": id, "video": bool, "session": str}
+    link           {"drone": id, "connected": bool, ...status}
+    recording      {"drone": id, "logging": bool, "video": bool, "session": str}
 """
 from __future__ import annotations
 

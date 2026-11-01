@@ -1,5 +1,5 @@
 // SDK console: raw command entry with history, completion and inline reference.
-import { $, api, on, h, hhmmss, selId, store, toast } from '../core.js';
+import { $, api, on, h, hhmmss, selId, store } from '../core.js';
 
 export const SDK = [
   ['command', 'enter SDK mode'], ['takeoff', 'auto takeoff'], ['land', 'auto land'], ['emergency', 'stop motors immediately'],
@@ -29,11 +29,9 @@ async function send() {
   if (!text) return;
   hist.unshift(text); hi = -1;
   $('#conIn').value = '';
-  if (text.startsWith('rc ')) toast('rc from the console bypasses the dead-man — prefer the sticks', 'warn');
-  try {
-    if ($('#conFleet').checked) await api('/fleet/command', { text });
-    else await api(`/drones/${selId()}/command`, { text, source: 'console' });
-  } catch (e) { line('err', `! ${e.message}`); }
+  if (text.startsWith('rc ')) line('err', 'note: rc typed here is not limited by the stick limit / dead-man');
+  try { await api(`/drones/${selId()}/command`, { text, source: 'console' }); }
+  catch (e) { line('err', `! ${e.message}`); }
 }
 $('#conSend').onclick = send;
 $('#conIn').addEventListener('keydown', (e) => {
@@ -50,5 +48,9 @@ $('#conIn').addEventListener('keydown', (e) => {
 
 on('command', (d) => {
   const dr = Object.keys(store.drones).length > 1 ? `[${d.drone}] ` : '';
-  line(d.ok ? 'ok' : 'err', h('span', { class: 'tx' }, `${dr}> ${d.cmd}`), `  ${d.resp ?? 'timeout'}  `, h('span', { class: 't' }, `${Math.round((d.dt || 0) * 1000)} ms`));
+  line(d.ok ? 'ok' : 'err', h('span', { class: 'tx' }, `${dr}> ${d.cmd}`), `  ${d.resp ?? 'no reply (timeout)'}  `, h('span', { class: 't' }, `${Math.round((d.dt || 0) * 1000)} ms`));
+});
+on('tello', (d) => {
+  const dr = Object.keys(store.drones).length > 1 ? `[${d.drone}] ` : '';
+  line('tello', `${dr}drone: ${d.msg}`);
 });

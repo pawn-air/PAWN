@@ -3,8 +3,8 @@
     pip install -r requirements.txt pyinstaller
     python packaging/build.py            ->  dist/PAWN-GCS/  +  dist/PAWN-GCS-<os>-<arch>.zip
 
-The folder contains the executable plus config.toml, missions/ and plugins/ next to it, so the
-team can edit settings and drop in vision plugins without Python installed. Start with
+The folder contains the executable plus config.toml and docs/ next to it, so the team can edit
+the drone list without Python installed. Start with
 ``PAWN-GCS --sim`` to try it without a drone.
 """
 import platform
@@ -23,7 +23,7 @@ def main() -> None:
                            str(ROOT / "packaging" / "pawn_gcs.spec")])
     for item in ("config.toml", "README.md"):
         shutil.copy2(ROOT / item, DIST / item)
-    for folder in ("missions", "plugins", "docs"):
+    for folder in ("docs",):
         if (DIST / folder).exists():
             shutil.rmtree(DIST / folder)
         shutil.copytree(ROOT / folder, DIST / folder, ignore=shutil.ignore_patterns("__pycache__"))

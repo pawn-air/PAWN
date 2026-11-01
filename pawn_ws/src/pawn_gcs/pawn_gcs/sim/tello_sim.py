@@ -47,6 +47,7 @@ class SimTello(asyncio.DatagramProtocol):
         self.speed_cmps = 100
         self.rc = (0, 0, 0, 0)
         self.rc_t = 0.0
+        self.last_cmd_t = time.monotonic()    # like the real Tello: no command for 15 s -> it lands itself
         self.busy: asyncio.Task | None = None
         self.transport: asyncio.DatagramTransport | None = None
         self.gcs_addr = None
@@ -61,6 +62,7 @@ class SimTello(asyncio.DatagramProtocol):
 
     def datagram_received(self, data, addr):
         self.gcs_addr = addr
+        self.last_cmd_t = time.monotonic()
         cmd = data.decode("ascii", "replace").strip()
         asyncio.ensure_future(self._handle(cmd, addr))
 
@@ -121,6 +123,13 @@ class SimTello(asyncio.DatagramProtocol):
         if self.busy and not self.busy.done():
             return self._reply("error Not joystick", addr)
         self.busy = asyncio.ensure_future(self._motion(head, args, addr))
+
+    def force_land(self) -> None:
+        """Firmware-initiated landing (low battery / overheat / command timeout) - the GCS is not told."""
+        self._cancel()
+        self.flying = False
+        self.vx = self.vy = self.vz = self.wz = 0.0
+        self.z = 0.0
 
     def _cancel(self):
         if self.busy and not self.busy.done():
@@ -244,13 +253,16 @@ class SimTello(asyncio.DatagramProtocol):
             bvx, bvy = c * pvx + s * pvy, -s * pvx + c * pvy
             self.pitch += ((bvx * 9 if self.flying else 0) - self.pitch) * 0.15
             self.roll += ((-bvy * 9 if self.flying else 0) - self.roll) * 0.15
+            if self.busy is not None and not self.busy.done():
+                self.last_cmd_t = now  # a running move counts as "commanded"
+            if self.flying and now - self.last_cmd_t > 15.0:
+                self.force_land()
             if self.flying:
                 self.motor_time += dt
                 self.battery = max(0.0, self.battery - dt / 9.0)
                 self.temp = min(92.0, self.temp + dt * 0.03)
                 if self.battery <= 3:
-                    self.flying = False  # forced landing
-                    self.z = 0
+                    self.force_land()
             else:
                 self.battery = max(0.0, self.battery - dt / 120.0)
                 self.temp = max(45.0, self.temp - dt * 0.01)

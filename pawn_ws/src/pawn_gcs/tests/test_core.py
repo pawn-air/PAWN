@@ -1,12 +1,11 @@
-"""Unit tests: protocol parsing, missions, odometry, settings. No network needed."""
+"""Unit tests: protocol parsing, settings, unsolicited drone replies. No network needed."""
+import json
 from pathlib import Path
 
 import pytest
 
-from pawn_gcs.config import Settings
-from pawn_gcs.core.mission import MissionError, preview, to_command, validate
-from pawn_gcs.core.odometry import Odometry
-from pawn_gcs.core.tello import parse_state
+from pawn_gcs.config import DroneConfig, Settings, load_config
+from pawn_gcs.core.tello import TelloLink, parse_state
 
 
 def test_parse_state_full_string():
@@ -23,68 +22,48 @@ def test_parse_state_edu_fields_and_garbage():
     assert st["mid"] == -1 and st["mpry_p"] == 0 and "bad" not in st
 
 
-def test_mission_validate_and_commands():
-    m = {"steps": [{"type": "takeoff"}, {"type": "move", "dir": "forward", "cm": 100},
-                   {"type": "rotate", "dir": "cw", "deg": 90}, {"type": "go", "x": 50, "y": 0, "z": 0, "speed": 30},
-                   {"type": "wait", "s": 1}, {"type": "land"}]}
-    validate(m)
-    assert [to_command(s) for s in m["steps"]] == ["takeoff", "forward 100", "cw 90", "go 50 0 0 30", None, "land"]
-
-
-@pytest.mark.parametrize("bad", [
-    {"steps": []},
-    {"steps": [{"type": "move", "dir": "forward", "cm": 10}]},     # < 20 cm
-    {"steps": [{"type": "rotate", "dir": "spin", "deg": 90}]},
-    {"steps": [{"type": "go", "x": 5, "y": 5, "z": 5, "speed": 50}]},  # all |v| < 20
-    {"steps": [{"type": "teleport"}]},
-])
-def test_mission_validate_rejects(bad):
-    with pytest.raises(MissionError):
-        validate(bad)
-
-
-def test_mission_preview_square():
-    sq = {"steps": [{"type": "takeoff"}] + [s for _ in range(4) for s in (
-        {"type": "move", "dir": "forward", "cm": 200}, {"type": "rotate", "dir": "ccw", "deg": 90})] + [{"type": "land"}]}
-    p = preview(sq)
-    end = p["points"][-1]
-    assert abs(end[0]) < 1e-6 and abs(end[1]) < 1e-6 and end[2] == 0  # closed square, landed at home
-    assert p["distance_m"] == pytest.approx(0.8 + 8 + 0.8, abs=1e-6)
-    assert p["max_range_m"] == pytest.approx(2 * 2 ** 0.5, abs=0.01)
-
-
-class _S:
-    def __init__(self, d=None):
-        self.d = d or {}
-
-    def get(self, k, default=None):
-        return self.d.get(k, default)
-
-
-def test_odometry_integrates_world_velocity(monkeypatch):
-    t = [100.0]
-    monkeypatch.setattr("pawn_gcs.core.odometry.time.monotonic", lambda: t[0])
-    od = Odometry(_S())
-    for _ in range(11):  # 1 s at 10 Hz, vgx = 5 dm/s -> 0.5 m forward
-        od.update({"vgx": 5, "vgy": 0, "h": 100, "yaw": 0})
-        t[0] += 0.1
-    p = od.pose()
-    assert p["x"] == pytest.approx(0.5, abs=0.02) and p["z"] == pytest.approx(1.0)
-    assert od.horizontal_range == pytest.approx(0.5, abs=0.02)
-
-
-def test_odometry_home_offset_and_external_pose():
-    od = Odometry(_S(), offset=(2.0, 1.0, 90.0))
-    od.update({"yaw": 0, "h": 0})
-    p = od.pose()
-    assert p["x"] == pytest.approx(2.0) and p["y"] == pytest.approx(1.0) and p["yaw"] == pytest.approx(90.0)
-    od.set_external({"x": 5, "y": 6, "z": 1, "yaw": 10})
-    assert od.pose()["source"] == "external" and od.pose()["x"] == 5
-
-
 def test_settings_merge_and_persist(tmp_path: Path):
     s = Settings(tmp_path / "s.json")
-    assert s.get("safety.battery_land") == 15
-    s.update({"safety": {"battery_land": 20}})
+    assert s.get("safety.stick_max") == 60
+    s.update({"safety": {"stick_max": 40}})
     s2 = Settings(tmp_path / "s.json")
-    assert s2.get("safety.battery_land") == 20 and s2.get("safety.battery_warn") == 30
+    assert s2.get("safety.stick_max") == 40 and s2.get("safety.deadman_ms") == 400
+
+
+def test_settings_drop_removed_options(tmp_path: Path):
+    """settings.json from the full-featured version must not bring back auto-land & co."""
+    p = tmp_path / "s.json"
+    p.write_text(json.dumps({"safety": {"battery_land": 10, "battery_autoland": True, "stick_max": 30},
+                             "odometry": {"velocity_frame": "world"}}))
+    s = Settings(p)
+    assert s.all()["safety"] == {"stick_max": 30, "deadman_ms": 400}
+    assert "odometry" not in s.all()
+    s.update({"geofence": {"on": True}})
+    assert "geofence" not in s.all()
+
+
+def test_old_config_toml_still_loads(tmp_path: Path):
+    p = tmp_path / "config.toml"
+    p.write_text('[paths]\nplugin_dirs = ["plugins"]\nmissions_dir = "missions"\n'
+                 '[[drones]]\nid = "a"\nhome_x = 1.0\nhome_yaw = 0.0\n')
+    cfg = load_config(p)
+    assert cfg.drones[0].id == "a"
+
+
+def test_unsolicited_and_late_replies_are_surfaced():
+    got = []
+    link = TelloLink(DroneConfig(), lambda *a: None, lambda *a: None, on_unsolicited=got.append)
+    link._on_reply(b"error Auto land", None)       # nothing pending -> surfaced
+    link._pending = "battery?"
+    link._on_reply(b"87", None)                    # pending -> queued as the reply
+    assert got == ["error Auto land"] and link._replies.get_nowait() == "87"
+
+
+def test_binary_packets_are_never_taken_as_a_reply():
+    got = []
+    link = TelloLink(DroneConfig(), lambda *a: None, lambda *a: None, on_unsolicited=got.append)
+    link._pending = "command"
+    link._on_reply(bytes.fromhex("cc18010b9a560071010000"), None)   # Tello app protocol packet
+    link._on_reply(b"ok", None)
+    assert link._replies.get_nowait() == "ok" and link._replies.empty()
+    assert got == ["binary packet, 11 bytes"]

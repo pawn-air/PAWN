@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pawn-gcs"
-version = "2.0.0"
-description = "PAWN Ground Control Station - web GCS for DJI Tello search & rescue (live FPV, telemetry, 3D target localisation, backtracking/RTH, coverage, SAR patterns, collision guard, 3D dataset export, vision plugins, autonomy, flight logs, simulator)"
+version = "3.0.0"
+description = "PAWN Ground Control Station - minimal web GCS for DJI Tello (live FPV, keyboard control, raw telemetry, logs, simulator)"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
@@ -18,7 +18,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-yolo = ["ultralytics"]
 dev = ["pytest", "httpx", "playwright"]
 build = ["pyinstaller>=6.0"]
 
