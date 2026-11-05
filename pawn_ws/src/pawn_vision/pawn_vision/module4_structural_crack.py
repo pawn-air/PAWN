@@ -156,6 +156,76 @@ class StructuralCrackSARDetector:
         return True
 
     @staticmethod
+    def _verify_crack_fissure_physics(
+        gray_img: np.ndarray, bin_mask: np.ndarray, bbox: List[float]
+    ) -> Tuple[bool, float, float]:
+        """
+        Çizgisel çatlak adayının gerçekten duvar/kolon içine çökmüş karanlık ve
+        düzensiz (tortuous) bir yarık olup olmadığını doğrular:
+          1. Fissure Darkness Drop (`ddrop = ring_mean - core_mean`):
+             Gerçek bir çatlak yarık olduğu için içine ışık girmez; çevresindeki
+             15x15 genişletilmiş (dilated) duvar halkasından en az ~19.5 birim daha
+             karanlık olmalıdır. Beyaz halı saçakları (ddrop < 0) ve parlak
+             fayans/parke yansımaları elenir.
+          2. Centerline Tortuosity / Sapma (`cdev`):
+             Cetvelle çizilmiş gibi dümdüz olan mimari çizgiler (kapı eşiği,
+             süpürgelik, fayans derzi, koltuk dikişi) çok düşük doğrusal sapmaya
+             (`cdev < 1.80`) sahiptir. Gerçek deprem/yapı çatlakları ise kırıklı ve
+             zikzaklıdır (`cdev >= 1.80` veya çok derin karanlık yarık `ddrop >= 38.0`).
+        """
+        h_full, w_full = bin_mask.shape[:2]
+        x0 = max(0, int(bbox[0]) - 16)
+        y0 = max(0, int(bbox[1]) - 16)
+        x1 = min(w_full, int(bbox[2]) + 16)
+        y1 = min(h_full, int(bbox[3]) + 16)
+        roi_mask = bin_mask[y0:y1, x0:x1]
+        roi_gray = gray_img[y0:y1, x0:x1]
+
+        ys, xs = np.where(roi_mask > 0)
+        if len(xs) < 12:
+            return False, 0.0, 0.0
+
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
+        dilated = cv2.dilate(roi_mask, kernel, iterations=1)
+        ring_mask = (dilated > 0) & (roi_mask == 0)
+        if np.count_nonzero(ring_mask) < 15:
+            return False, 0.0, 0.0
+
+        core_mean = float(np.mean(roi_gray[roi_mask > 0]))
+        ring_mean = float(np.mean(roi_gray[ring_mask]))
+        ddrop = ring_mean - core_mean
+
+        dx = float(np.max(xs) - np.min(xs))
+        dy = float(np.max(ys) - np.min(ys))
+        if dx >= dy:
+            uniq_x = np.unique(xs)
+            if len(uniq_x) >= 6:
+                med_y = np.array([np.median(ys[xs == ux]) for ux in uniq_x], dtype=np.float32)
+                poly = np.poly1d(np.polyfit(uniq_x.astype(np.float32), med_y, 1))
+                cdev = float(np.mean(np.abs(med_y - poly(uniq_x))))
+            else:
+                cdev = 0.0
+        else:
+            uniq_y = np.unique(ys)
+            if len(uniq_y) >= 6:
+                med_x = np.array([np.median(xs[ys == uy]) for uy in uniq_y], dtype=np.float32)
+                poly = np.poly1d(np.polyfit(uniq_y.astype(np.float32), med_x, 1))
+                cdev = float(np.mean(np.abs(med_x - poly(uniq_y))))
+            else:
+                cdev = 0.0
+
+        if ddrop < 12.0:
+            return False, round(ddrop, 2), round(cdev, 2)
+
+        if ddrop < 19.5 and cdev < 3.0:
+            return False, round(ddrop, 2), round(cdev, 2)
+
+        if cdev < 1.80 and ddrop < 38.0:
+            return False, round(ddrop, 2), round(cdev, 2)
+
+        return True, round(ddrop, 2), round(cdev, 2)
+
+    @staticmethod
     def _analyze_crack_geometry(
         binary_mask: np.ndarray, img_diag: float, bbox: List[float] | None = None
     ) -> Dict[str, Any]:
@@ -265,8 +335,9 @@ class StructuralCrackSARDetector:
         # 1. KATMAN: Piksel Bazlı Çizgisel Çatlak Segmentasyonu (`crack_seg_yolo.pt`)
         # İç mekan (ev/ofis) sarı/krem/renkli boyalı alçı duvarlarda çatlak kontrastını artırmak için
         # hem orijinal görüntüde hem de nötr gri-CLAHE (beton tonu) normalize görüntüde tarama yapar.
+        gray_raw = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         clahe_gray = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(
-            cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            gray_raw
         )
         neutral_indoor_frame = cv2.cvtColor(clahe_gray, cv2.COLOR_GRAY2BGR)
 
@@ -330,7 +401,6 @@ class StructuralCrackSARDetector:
                         break
                 if is_dup:
                     continue
-                seen_crack_boxes.append(bbox)
                 conf = float(confs[i])
 
                 if masks_np is not None and i < len(masks_np):
@@ -345,13 +415,22 @@ class StructuralCrackSARDetector:
                     x1, y1, x2, y2 = [int(v) for v in bbox]
                     bin_mask[y1:y2, x1:x2] = 1
 
+                # V2 Fiziksel Yarık Doğrulaması: Halı saçaklarını, parke yansımalarını ve
+                # cetvel gibi dümdüz kapı eşiği/mobilya dikişi çizgilerini ele!
+                is_real_fissure, ddrop, cdev = self._verify_crack_fissure_physics(
+                    gray_raw, bin_mask, bbox
+                )
+                if not is_real_fissure:
+                    continue
+
                 geom = self._analyze_crack_geometry(bin_mask, img_diag, bbox)
                 # İç mekan filtre 1: Gerçek çizgisel çatlak ince ve uzundur; kalın cisimleri (avize kolu, vantilatör kanadı, yastık köşesi vb.) ele
-                if geom["max_width_px"] / max(1.0, geom["length_px"]) > 0.22 or geom["max_width_px"] > 30.5:
+                if geom["max_width_px"] / max(1.0, geom["length_px"]) > 0.22 or geom["max_width_px"] > 42.5:
                     continue
                 # İç mekan filtre 2: Alt süpürgelik / dolap tabanı gölgesi (zemine bitişik yatay köşe gölgesi)
                 if bbox[3] > img_h * 0.88 and geom["angle_deg"] < 26.0 and geom["length_ratio"] < 0.15:
                     continue
+                seen_crack_boxes.append(bbox)
                 max_room_severity = max(max_room_severity, geom["severity_score"])
 
                 color = geom["color"]
@@ -382,6 +461,8 @@ class StructuralCrackSARDetector:
                             "max_width_px": geom["max_width_px"],
                             "angle_deg": geom["angle_deg"],
                             "is_diagonal_shear_crack": geom["is_diagonal_shear"],
+                            "darkness_drop": ddrop,
+                            "tortuosity_dev": cdev,
                         },
                         "bbox_xyxy": [round(v, 1) for v in bbox],
                         "slam_pin_2d": {

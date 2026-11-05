@@ -42,6 +42,7 @@ from module1_human_animal import HumanAnimalSARDetector
 from module2_fire_smoke import FireSmokeSARDetector
 from module3_hazard_signs import HazardSignSARDetector
 from module4_structural_crack import StructuralCrackSARDetector
+from temporal_tracker import TemporalTracker
 
 
 class SARVideoPipeline:
@@ -53,7 +54,7 @@ class SARVideoPipeline:
         """
         self.mode = mode
         print("=" * 72)
-        print(f"[SAR VİDEO MOTORU] Başlatılıyor... Mod: {self.mode.upper()}")
+        print(f"[SAR VİDEO MOTORU V2] Başlatılıyor... Mod: {self.mode.upper()}")
         print("=" * 72)
 
         self.mod1_human = HumanAnimalSARDetector()
@@ -61,14 +62,16 @@ class SARVideoPipeline:
         self.mod3_hazard = HazardSignSARDetector()
         self.mod4_crack = StructuralCrackSARDetector()
         self.risk_engine = IndoorSARRiskAssessmentEngine()
+        self.tracker = TemporalTracker()
 
-        # Tespit Önbelleği (Kareler arası tespit sürekliliği)
+        # Tespit Önbelleği (Temporal Trust Gate onaylı tespitler)
         self.cache: Dict[str, List[Dict[str, Any]]] = {
             "human_animal": [],
             "fire_smoke": [],
             "hazard_signs": [],
             "structural": [],
         }
+        self._last_furniture_boxes: List[List[float]] = []
 
         # Modül 4 maskesi önbelleği
         self._last_crack_mask: Optional[np.ndarray] = None
@@ -85,13 +88,82 @@ class SARVideoPipeline:
 
         print("[SAR VİDEO MOTORU] Tüm modeller ve GPU hazır!\n")
 
+    @staticmethod
+    def _box_overlap_ratio(boxA: List[float], boxB: List[float]) -> float:
+        xA = max(boxA[0], boxB[0])
+        yA = max(boxA[1], boxB[1])
+        xB = min(boxA[2], boxB[2])
+        yB = min(boxA[3], boxB[3])
+        inter = max(0.0, xB - xA) * max(0.0, yB - yA)
+        min_area = min(
+            max(1.0, (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])),
+            max(1.0, (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])),
+        )
+        return inter / min_area
+
+    @staticmethod
+    def _box_inside_ratio(inner_box: List[float], outer_box: List[float]) -> float:
+        xA = max(inner_box[0], outer_box[0])
+        yA = max(inner_box[1], outer_box[1])
+        xB = min(inner_box[2], outer_box[2])
+        yB = min(inner_box[3], outer_box[3])
+        inter = max(0.0, xB - xA) * max(0.0, yB - yA)
+        inner_area = max(1.0, (inner_box[2] - inner_box[0]) * (inner_box[3] - inner_box[1]))
+        return inter / inner_area
+
+    def _filter_hazard_signs(self, raw_signs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        human_and_furn = [d["bbox_xyxy"] for d in self.cache["human_animal"]] + self._last_furniture_boxes
+        filtered = []
+        for s_det in raw_signs:
+            sb = s_det["bbox_xyxy"]
+            inside_obj = any(self._box_inside_ratio(sb, ob) > 0.35 for ob in human_and_furn)
+            if not (inside_obj and s_det.get("confidence", 0.5) < 0.80):
+                filtered.append(s_det)
+        return filtered
+
+    def _filter_fire_smoke(self, raw_fire: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        filtered = []
+        for f_det in raw_fire:
+            fb = f_det["bbox_xyxy"]
+            is_sign = any(
+                self._box_overlap_ratio(fb, h_det["bbox_xyxy"]) > 0.25
+                for h_det in self.cache["hazard_signs"]
+            )
+            if not is_sign:
+                filtered.append(f_det)
+        return filtered
+
+    def _filter_structural_cracks(self, raw_cracks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        padded_human_animal = [
+            [d["bbox_xyxy"][0] - 45.0, d["bbox_xyxy"][1] - 45.0, d["bbox_xyxy"][2] + 45.0, d["bbox_xyxy"][3] + 45.0]
+            for d in self.cache["human_animal"]
+        ]
+        fg_boxes = (
+            padded_human_animal
+            + [d["bbox_xyxy"] for d in self.cache["fire_smoke"]]
+            + [d["bbox_xyxy"] for d in self.cache["hazard_signs"]]
+        )
+        valid = []
+        for c_det in raw_cracks:
+            cb = c_det["bbox_xyxy"]
+            inside_fg = any(self._box_inside_ratio(cb, fgb) > 0.25 for fgb in fg_boxes)
+            is_linear_crack = c_det.get("class_name") == "crack"
+            inside_furn = is_linear_crack and any(
+                self._box_inside_ratio(cb, fb) > 0.30 for fb in self._last_furniture_boxes
+            )
+            if inside_fg or (inside_furn and c_det.get("confidence", 0.5) < 0.78):
+                continue
+            valid.append(c_det)
+        return valid
+
     def process_frame(
         self,
         frame: np.ndarray,
         frame_idx: int,
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
         """
-        Tek bir video karesini işler, HUD çizimlerini yapar ve anlık risk raporunu döner.
+        Tek bir video karesini işler, TemporalTracker Trust Gate süzgecinden geçirir,
+        HUD çizimlerini yapar ve anlık risk + Active Perception raporunu döner.
         """
         h_img, w_img = frame.shape[:2]
         t0 = time.perf_counter()
@@ -99,41 +171,73 @@ class SARVideoPipeline:
         mod_idx = frame_idx % 4
 
         if self.mode == "synchronous":
-            # Her karede 4 modülü de çalıştır
             rep1 = self.mod1_human.analyze_image("", frame_bgr=frame, save_output=False)
-            rep2 = self.mod2_fire.analyze_image("", frame_bgr=frame, save_output=False)
-            rep3 = self.mod3_hazard.analyze_image("", frame_bgr=frame, save_output=False)
-            rep4 = self.mod4_crack.analyze_image("", frame_bgr=frame, save_output=False)
+            self._last_furniture_boxes = rep1.get("indoor_furniture_boxes", [])
+            self.cache["human_animal"] = self.tracker.update_category(
+                "human_animal", rep1.get("detections", []), frame_idx, w_img, h_img
+            )
 
-            self.cache["human_animal"] = rep1.get("detections", [])
-            self.cache["fire_smoke"] = rep2.get("detections", [])
-            self.cache["hazard_signs"] = rep3.get("detections", [])
-            self.cache["structural"] = rep4.get("detections", [])
+            rep3 = self.mod3_hazard.analyze_image("", frame_bgr=frame, save_output=False)
+            filtered_signs = self._filter_hazard_signs(rep3.get("detections", []))
+            self.cache["hazard_signs"] = self.tracker.update_category(
+                "hazard_signs", filtered_signs, frame_idx, w_img, h_img
+            )
+
+            rep2 = self.mod2_fire.analyze_image(
+                "", frame_bgr=frame, save_output=False, is_video_stream=True
+            )
+            filtered_fire = self._filter_fire_smoke(rep2.get("detections", []))
+            self.cache["fire_smoke"] = self.tracker.update_category(
+                "fire_smoke", filtered_fire, frame_idx, w_img, h_img
+            )
+
+            rep4 = self.mod4_crack.analyze_image("", frame_bgr=frame, save_output=False)
+            valid_cracks = self._filter_structural_cracks(rep4.get("detections", []))
+            self.cache["structural"] = self.tracker.update_category(
+                "structural", valid_cracks, frame_idx, w_img, h_img
+            )
             self._last_crack_mask = rep4.get("_mask_only_array")
 
         else:
-            # FRAME MULTIPLEXING: Sırayla tek bir modülü çalıştır, diğerlerini önbellekten oku
+            # FRAME MULTIPLEXING: Sırayla tek bir modülü çalıştır, TemporalTracker ile onayla
             if mod_idx == 0:
                 rep1 = self.mod1_human.analyze_image("", frame_bgr=frame, save_output=False)
-                self.cache["human_animal"] = rep1.get("detections", [])
+                self._last_furniture_boxes = rep1.get("indoor_furniture_boxes", [])
+                self.cache["human_animal"] = self.tracker.update_category(
+                    "human_animal", rep1.get("detections", []), frame_idx, w_img, h_img
+                )
             elif mod_idx == 1:
-                rep2 = self.mod2_fire.analyze_image("", frame_bgr=frame, save_output=False)
-                self.cache["fire_smoke"] = rep2.get("detections", [])
+                rep2 = self.mod2_fire.analyze_image(
+                    "", frame_bgr=frame, save_output=False, is_video_stream=True
+                )
+                filtered_fire = self._filter_fire_smoke(rep2.get("detections", []))
+                self.cache["fire_smoke"] = self.tracker.update_category(
+                    "fire_smoke", filtered_fire, frame_idx, w_img, h_img
+                )
             elif mod_idx == 2:
                 rep3 = self.mod3_hazard.analyze_image("", frame_bgr=frame, save_output=False)
-                self.cache["hazard_signs"] = rep3.get("detections", [])
+                filtered_signs = self._filter_hazard_signs(rep3.get("detections", []))
+                self.cache["hazard_signs"] = self.tracker.update_category(
+                    "hazard_signs", filtered_signs, frame_idx, w_img, h_img
+                )
             elif mod_idx == 3:
                 rep4 = self.mod4_crack.analyze_image("", frame_bgr=frame, save_output=False)
-                self.cache["structural"] = rep4.get("detections", [])
+                valid_cracks = self._filter_structural_cracks(rep4.get("detections", []))
+                self.cache["structural"] = self.tracker.update_category(
+                    "structural", valid_cracks, frame_idx, w_img, h_img
+                )
                 self._last_crack_mask = rep4.get("_mask_only_array")
 
-        # 5. Risk Assessment Motoru (Her karede 0.01 ms'de çalışır)
+        # 5. Risk Assessment Motoru (Yalnızca Trust Gate barajını geçmiş onaylı tespitlerle çalışır)
         risk_assessment = self.risk_engine.evaluate_room_risk(
             human_animal_dets=self.cache["human_animal"],
             fire_smoke_dets=self.cache["fire_smoke"],
             hazard_sign_dets=self.cache["hazard_signs"],
             structural_dets=self.cache["structural"],
         )
+
+        # 6. Aktif Algılama (Active Perception / Next-Best-View Manevra Hedefleri)
+        active_goals = self.tracker.generate_active_inspection_goals(w_img, h_img)
 
         canvas = frame.copy()
 
@@ -144,13 +248,16 @@ class SARVideoPipeline:
                 x1, y1, x2, y2 = max(0, bx[0]), max(0, bx[1]), min(w_img, bx[2]), min(h_img, bx[3])
                 canvas[y1:y2, x1:x2] = self._last_crack_mask[y1:y2, x1:x2]
 
-        # Tespit kutularını ve SLAM pinlerini çiz
+        # Tespit kutularını, SLAM pinlerini ve Trust Score (Güven Puanı) değerlerini çiz
         # Modül 4 (Hasar & Çatlak)
         for det in self.cache["structural"]:
             sev = det.get("severity_score_100", 50.0)
             col = (0, 0, 255) if sev >= 52.0 else (0, 140, 255) if sev >= 28.0 else (0, 215, 255)
             pin = det.get("slam_pin_2d", {"cx": int((det["bbox_xyxy"][0] + det["bbox_xyxy"][2]) / 2), "cy": int((det["bbox_xyxy"][1] + det["bbox_xyxy"][3]) / 2)})
-            self._draw_hud_box(canvas, det["bbox_xyxy"], det.get("description", "HASAR"), (pin["cx"], pin["cy"]), col)
+            trust = det.get("trust_score", det.get("confidence", 0.85))
+            tid = det.get("track_id", 0)
+            lbl = f"[ID:{tid} T:{trust:.0%}] {det.get('description', 'HASAR')}"
+            self._draw_hud_box(canvas, det["bbox_xyxy"], lbl, (pin["cx"], pin["cy"]), col)
 
         # Modül 1 (İnsan / Hayvan)
         for det in self.cache["human_animal"]:
@@ -160,27 +267,55 @@ class SARVideoPipeline:
                 if st == "YERDE_YATIYOR_KRITIK"
                 else (0, 140, 255)
                 if st == "ENKAZ_ALTI_KISMI_GORUNUM"
+                else (0, 215, 255)
+                if st == "KADRAJ_KIRPILMASI_BELIRSIZ"
                 else (255, 180, 0)
                 if det.get("category") == "animal"
                 else (0, 200, 0)
             )
             pin = det.get("slam_pin_2d", {"cx": int((det["bbox_xyxy"][0] + det["bbox_xyxy"][2]) / 2), "cy": int((det["bbox_xyxy"][1] + det["bbox_xyxy"][3]) / 2)})
-            conf = det.get("confidence", 0.9)
-            self._draw_hud_box(canvas, det["bbox_xyxy"], f"{det.get('description', 'INSAN')} ({conf:.0%})", (pin["cx"], pin["cy"]), col)
+            trust = det.get("trust_score", det.get("confidence", 0.9))
+            tid = det.get("track_id", 0)
+            lbl = f"[ID:{tid} T:{trust:.0%}] {det.get('description', 'INSAN')}"
+            self._draw_hud_box(canvas, det["bbox_xyxy"], lbl, (pin["cx"], pin["cy"]), col)
 
         # Modül 2 (Yangın / Duman)
         for det in self.cache["fire_smoke"]:
             col = (0, 20, 255) if "fire" in det.get("class_name", "") else (130, 130, 130)
             pin = det.get("slam_pin_2d", {"cx": int((det["bbox_xyxy"][0] + det["bbox_xyxy"][2]) / 2), "cy": int((det["bbox_xyxy"][1] + det["bbox_xyxy"][3]) / 2)})
-            self._draw_hud_box(canvas, det["bbox_xyxy"], det.get("description", "YANGIN"), (pin["cx"], pin["cy"]), col)
+            trust = det.get("trust_score", det.get("confidence", 0.85))
+            tid = det.get("track_id", 0)
+            lbl = f"[ID:{tid} T:{trust:.0%}] {det.get('description', 'YANGIN')}"
+            self._draw_hud_box(canvas, det["bbox_xyxy"], lbl, (pin["cx"], pin["cy"]), col)
 
         # Modül 3 (Tehlike Levhaları)
         for det in self.cache["hazard_signs"]:
             pin = det.get("slam_pin_2d", {"cx": int((det["bbox_xyxy"][0] + det["bbox_xyxy"][2]) / 2), "cy": int((det["bbox_xyxy"][1] + det["bbox_xyxy"][3]) / 2)})
-            self._draw_hud_box(canvas, det["bbox_xyxy"], det.get("description", "LEVHA"), (pin["cx"], pin["cy"]), (180, 0, 255))
+            trust = det.get("trust_score", det.get("confidence", 0.88))
+            tid = det.get("track_id", 0)
+            lbl = f"[ID:{tid} T:{trust:.0%}] {det.get('description', 'LEVHA')}"
+            self._draw_hud_box(canvas, det["bbox_xyxy"], lbl, (pin["cx"], pin["cy"]), (180, 0, 255))
 
         # Risk & Triyaj HUD Panelleri
         self.risk_engine.draw_risk_assessment_hud(canvas, risk_assessment)
+
+        # Aktif Algılama (Active Perception) Manevra Komutu HUD Bandı
+        if active_goals:
+            g0 = active_goals[0]
+            ap_banner = (
+                f"ACTIVE PERCEPTION [{g0['action']}]: {g0['reason']}"
+            )
+            cv2.rectangle(canvas, (10, 58), (min(w_img - 10, 980), 88), (20, 95, 185), -1)
+            cv2.putText(
+                canvas,
+                ap_banner[:112],
+                (18, 78),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.46,
+                (255, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
 
         # Telemetri Bilgisi (FPS & İşleme Modu)
         elapsed_sec = max(1e-5, time.perf_counter() - t0)
@@ -209,6 +344,7 @@ class SARVideoPipeline:
             "active_module": f"mod{mod_idx+1}",
             "risk_assessment": {k: v for k, v in risk_assessment.items() if not k.startswith("_")},
             "active_detections_count": len(all_dets),
+            "active_inspection_goals": active_goals,
         }
 
         return canvas, frame_report

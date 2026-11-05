@@ -28,18 +28,20 @@ from module1_human_animal import HumanAnimalSARDetector
 from module2_fire_smoke import FireSmokeSARDetector
 from module3_hazard_signs import HazardSignSARDetector
 from module4_structural_crack import StructuralCrackSARDetector
+from temporal_tracker import TemporalTracker
 
 
 class SARMasterPerceptionEngine:
     def __init__(self) -> None:
         print("=" * 72)
-        print("[SAR MASTER ENGINE] 4 Yapay Zeka Modülü + Risk Assessment Motoru Başlatılıyor...")
+        print("[SAR MASTER ENGINE V2] 4 Yapay Zeka Modülü + Risk & Active Perception Motoru Başlatılıyor...")
         print("=" * 72)
         self.mod1_human = HumanAnimalSARDetector()
         self.mod2_fire = FireSmokeSARDetector()
         self.mod3_hazard = HazardSignSARDetector()
         self.mod4_crack = StructuralCrackSARDetector()
         self.risk_engine = IndoorSARRiskAssessmentEngine()
+        self.tracker = TemporalTracker()
 
         # Canlı video akışı (30 FPS) için son tespitlerin önbelleği
         self._stream_cache: Dict[str, List[Dict[str, Any]]] = {
@@ -204,13 +206,16 @@ class SARMasterPerceptionEngine:
             )
 
         # Modül 1, 2 ve 3'ün tespit kutularını ve SLAM Pinlerini aynı tuval üzerine çiz
-        for det in rep1["detections"]:
+        active_inspection_goals: List[Dict[str, Any]] = []
+        for idx_h, det in enumerate(rep1["detections"], start=1):
             st = det["status"]
             col = (
                 (0, 0, 255)
                 if st == "YERDE_YATIYOR_KRITIK"
                 else (0, 140, 255)
                 if st == "ENKAZ_ALTI_KISMI_GORUNUM"
+                else (0, 215, 255)
+                if st == "KADRAJ_KIRPILMASI_BELIRSIZ"
                 else (255, 180, 0)
                 if det["category"] == "animal"
                 else (0, 200, 0)
@@ -223,6 +228,44 @@ class SARMasterPerceptionEngine:
                 (pin["cx"], pin["cy"]),
                 col,
             )
+            edge_info = det.get("edge_truncation", {})
+            if st == "KADRAJ_KIRPILMASI_BELIRSIZ" or edge_info.get("is_edge_truncated", False):
+                edges = edge_info.get("truncated_edges", [])
+                pitch_deg = -15.0 if "bottom" in edges else (12.0 if "top" in edges else -8.0)
+                active_inspection_goals.append(
+                    {
+                        "target_track_id": idx_h,
+                        "action": "STEP_BACK_AND_TILT",
+                        "delta_x_m": -0.80,
+                        "delta_y_m": round((0.5 - float(pin.get("norm_u", 0.5))) * 0.7, 2),
+                        "delta_z_m": 0.15 if "top" in edges else -0.10,
+                        "delta_yaw_deg": round((0.5 - float(pin.get("norm_u", 0.5))) * 25.0, 1),
+                        "delta_gimbal_pitch_deg": pitch_deg,
+                        "uncertainty_score": round(1.0 - float(det.get("confidence", 0.7)), 2),
+                        "reason": (
+                            f"Kazazede #{idx_h} kadraj sinirindan kirpilmis ({','.join(edges) or 'kenar'}). "
+                            f"Tam vucut teyidi icin 0.8m geri cekil ve kamerayi {pitch_deg:.0f} derece eg."
+                        ),
+                    }
+                )
+            elif st == "ENKAZ_ALTI_KISMI_GORUNUM":
+                norm_u = float(pin.get("norm_u", 0.5))
+                active_inspection_goals.append(
+                    {
+                        "target_track_id": idx_h,
+                        "action": "ORBIT_ARC_30_DEG",
+                        "delta_x_m": 0.0,
+                        "delta_y_m": 0.65 if norm_u >= 0.5 else -0.65,
+                        "delta_z_m": 0.0,
+                        "delta_yaw_deg": 30.0 if norm_u >= 0.5 else -30.0,
+                        "delta_gimbal_pitch_deg": -10.0,
+                        "uncertainty_score": round(1.0 - float(det.get("confidence", 0.7)), 2),
+                        "reason": (
+                            f"Kazazede #{idx_h} ic kadrajda kismi gorunumlu (olasi enkaz/engel). "
+                            f"Farkli acisindan teyit icin 30 derece yorunge (orbit) manevrasi yap."
+                        ),
+                    }
+                )
 
         for det in rep2["detections"]:
             col = (0, 20, 255) if "fire" in det["class_name"] else (130, 130, 130)
@@ -254,6 +297,20 @@ class SARMasterPerceptionEngine:
 
         # Üst ve Alt Çok-Modüllü Risk Assessment & Triyaj HUD Paneli Çizimi
         self.risk_engine.draw_risk_assessment_hud(canvas, risk_assessment)
+        if active_inspection_goals:
+            g0 = active_inspection_goals[0]
+            ap_banner = f"ACTIVE PERCEPTION [{g0['action']}]: {g0['reason']}"
+            cv2.rectangle(canvas, (10, 58), (min(img_w - 10, 980), 88), (20, 95, 185), -1)
+            cv2.putText(
+                canvas,
+                ap_banner[:112],
+                (18, 78),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.46,
+                (255, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
         risk_json_clean = {
             k: v for k, v in risk_assessment.items() if not k.startswith("_")
         }
@@ -287,6 +344,7 @@ class SARMasterPerceptionEngine:
                 "structural_cracks": len(rep4["detections"]),
                 "total_slam_pins": len(all_detections),
             },
+            "active_inspection_goals": active_inspection_goals,
             "slam_3d_pins_payload": all_detections,
         }
         with open(out_json_path, "w", encoding="utf-8") as f:

@@ -104,9 +104,13 @@ class HazardSignSARDetector:
     ) -> bool:
         """
         İç mekandaki siyah-beyaz QR kodların, barkodların, gazete/kitap harflerinin,
-        şişe etiketlerinin veya kıyafet fermuarlarının tehlike levhası sanılmasını
-        %100 engeller. Uluslararası standartlardaki (ISO 7010, UN GHS, OSHA/ANSI)
-        tüm tehlike levhaları mutlaka uyarı rengi (Sarı, Turuncu, Kırmızı veya Mor) içerir.
+        şişe etiketlerinin, düz sarı/turuncu yastıkların veya ahşap kapı yüzeylerinin
+        tehlike levhası sanılmasını engeller:
+          1. Uyarı rengi kontrolü (ISO 7010 / UN GHS / ANSI Sarı, Turuncu, Kırmızı, Mor).
+          2. İkincil Sembol/Kontrast Doğrulaması (V2 Two-Stage Verification):
+             Gerçek bir tehlike levhasının içinde keskin kontrastlı sembol/piktogram
+             veya yazı konturları (`gray_std >= 18.0` ve `edge_ratio >= 0.035`) bulunur;
+             düz sarı/turuncu duvar, yastık veya mobilya yüzeyleri elenir.
         """
         h_img, w_img = frame_bgr.shape[:2]
         x1, y1 = max(0, int(bbox[0])), max(0, int(bbox[1]))
@@ -118,7 +122,7 @@ class HazardSignSARDetector:
         hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
         total_px = float(crop.shape[0] * crop.shape[1])
 
-        # Uyarı Sarısı / Turuncusu / Kırmızısı / ANSI Radyasyon Moru
+        # 1. Uyarı Sarısı / Turuncusu / Kırmızısı / ANSI Radyasyon Moru
         mask_yellow_orange = cv2.inRange(
             hsv, np.array([5, 60, 60], dtype=np.uint8), np.array([40, 255, 255], dtype=np.uint8)
         )
@@ -134,7 +138,18 @@ class HazardSignSARDetector:
             + np.count_nonzero(mask_red2)
         )
         warn_ratio = float(warn_px) / total_px
-        return warn_ratio >= 0.06
+        if warn_ratio < 0.06:
+            return False
+
+        # 2. Piktogram / Sembol Kontrast ve Kenar Yoğunluğu Doğrulaması
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        gray_std = float(np.std(gray))
+        edges = cv2.Canny(gray, 60, 160)
+        edge_ratio = float(np.count_nonzero(edges)) / total_px
+        if gray_std < 18.0 or edge_ratio < 0.035:
+            return False
+
+        return True
 
     def analyze_image(
         self,

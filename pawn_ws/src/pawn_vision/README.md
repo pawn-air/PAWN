@@ -1,20 +1,21 @@
-# PAWN Vision (`pawn_vision`)
+# PAWN Vision (`pawn_vision`) — V2 Robust Perception Engine
 
-This ROS 2 package provides the complete multi-modal Search & Rescue (SAR) Perception, Hazard Detection, and Real-Time Risk Assessment engine for the **PAWN** multi-drone autonomous exploration system.
+This ROS 2 package provides the complete multi-modal Search & Rescue (SAR) Perception, Hazard Detection, Temporal Trust Tracking, and Real-Time Risk Assessment engine for the **PAWN** multi-drone autonomous exploration system.
 
 ---
 
-## 1. Subsystem Architecture
+## 1. Subsystem Architecture (V2)
 
-The package integrates **6 specialized lightweight YOLOv11 deep learning models** and a deterministic **INSARAG/AFAD Risk Assessment & Triage Engine** operating under a 30–40 FPS **Frame Multiplexing Scheduler**:
+The package integrates **6 specialized lightweight YOLOv11 deep learning models**, a **Temporal Trust Score & Anti-Flicker Tracking Engine (`temporal_tracker.py`)**, and a deterministic **INSARAG/AFAD Risk Assessment & Triage Engine** operating under a 30–40 FPS **Frame Multiplexing Scheduler**:
 
 | Module | Task | Model Architecture | Metric / Benchmark |
 | :--- | :--- | :--- | :--- |
-| **Module 1** | Human & Pet Detection + 17-Keypoint Pose | `yolo11n.pt` + `yolo11n-pose.pt` | Distinguishes Fallen Victims (Critical P1) vs. Standing Normal (P2). |
-| **Module 2** | Flame & Smoke Detection | `fire_smoke_yolo.pt` (D-Fire dataset) | Dual verification: Flame core + Canny tongue edge roughness. |
-| **Module 3** | ISO 7010 & GHS Hazard Signs | `hazard_signs_yolo11n.pt` | **mAP50: 99.0%** across 19 official international danger templates. |
-| **Module 4** | Structural Cracks & Heavy Damage (v4) | `crack_seg_yolo.pt` + `heavy_structural_yolo11n.pt` | **mAP50: 89.6%** (Spalling: 98.2%, Exposed Rebar: 99.5%, Brick: 70.9%). Optimized for both 25px–75px localized damage and heavy collapses. |
+| **Module 1** | Human & Pet Detection + 17-Keypoint Pose | `yolo11n.pt` + `yolo11n-pose.pt` | Distinguishes Fallen Victims (Critical P1) vs. Standing Normal (P2). V2 adds Frame-Edge Awareness (`KADRAJ_KIRPILMASI_BELIRSIZ`) & cross-model skeleton validation. |
+| **Module 2** | Flame & Smoke Detection | `fire_smoke_yolo.pt` (D-Fire dataset) | V2 dual verification: Flame core + Canny edge roughness + Farnebäck dense optical flow & plume texture analysis. |
+| **Module 3** | ISO 7010 & GHS Hazard Signs | `hazard_signs_yolo11n.pt` | **mAP50: 99.0%** across 19 official international danger templates with two-stage pictogram/stroke density verification. |
+| **Module 4** | Structural Cracks & Heavy Damage (v4) | `crack_seg_yolo.pt` + `heavy_structural_yolo11n.pt` | **mAP50: 89.6%**. V2 adds fissure darkness drop (`ddrop`) and centerline tortuosity (`cdev`) verification to reject carpet borders, thresholds, and seams. |
 | **Module 5** | Multi-Modal Risk Engine & Triage | Deterministic MCDM / Expert System | **0.012 ms latency**. Computes 4D risk vector, compound synergies, and INSARAG P1–P5 codes. |
+| **Tracking** | Temporal Trust Score & Active Perception | Spatial IoU + Center Distance Tracker | Accumulates trust score ($T_t$), suppresses single-frame false positives, smooths bounding boxes via EMA, and triggers inspection maneuvers for truncated targets. |
 
 ---
 
