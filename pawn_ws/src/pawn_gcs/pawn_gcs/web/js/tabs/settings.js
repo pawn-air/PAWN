@@ -5,7 +5,7 @@ const LABELS = {
   stick_max: 'Stick limit ± (0-100)', deadman_ms: 'Dead-man: sticks → 0 after no input (ms)',
   rate_hz: 'rc packet rate (Hz)', timeout_s: 'State link shown lost after (s)',
   jpeg_quality: 'Browser JPEG quality', max_fps: 'Browser max fps', relay_udp: 'Raw H.264 relay (host:port, comma)',
-  log_on_connect: 'Log while connected',
+  log_on_connect: 'Log while connected', video_crf: 'Recorded video quality (H.264 CRF, lower = better)',
 };
 
 // After a change the field gives up focus, so W/A/S/D and the arrows go to the sticks again

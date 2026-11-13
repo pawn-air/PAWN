@@ -127,6 +127,35 @@ def test_log_session_is_raw(client):
     assert " TX takeoff" in wire and " RX ok" in wire and " TX rc " in wire
 
 
+def test_video_recording_keeps_real_frame_times(client):
+    av = pytest.importorskip("av")
+    client.post("/api/drones/t1/record", json={"what": "video", "on": True})
+    sid = _st(client)["recording"]["session"]
+    time.sleep(2.5)
+    client.post("/api/drones/t1/record", json={"what": "log", "on": False})   # stops video too
+    sess = lambda: next(x for x in client.get("/api/recordings").json() if x["id"] == sid)
+    s = _wait(lambda: "video" in sess()["meta"] and sess(), 30)
+    assert s, "video summary missing from meta.json"
+    v = s["meta"]["video"]
+    assert {"video.mp4", "frames.csv"} <= set(s["files"]) and v["frames"] > 20
+
+    rows = client.get(f"/api/recordings/{sid}/frames.csv").text.splitlines()
+    assert rows[0] == "frame,t,src_id" and len(rows) - 1 == v["frames"]
+    idx = [r.split(",") for r in rows[1:]]
+    assert [int(r[0]) for r in idx] == list(range(v["frames"]))
+    t = [float(r[1]) for r in idx]
+    src = [int(r[2]) for r in idx]
+    assert t == sorted(t) and src == sorted(set(src)), "no duplicated frames, times in order"
+    assert t[0] == pytest.approx(v["t_first"]) and t[-1] == pytest.approx(v["t_last"])
+
+    # video.mp4 presentation times = frames.csv times (relative to the first frame), one frame per row
+    with av.open(str(client.app.state.gcs.sessions.path(sid, "video.mp4"))) as c:
+        vs = c.streams.video[0]
+        pts = sorted(float(f.pts * vs.time_base) for f in c.decode(vs))
+    assert len(pts) == v["frames"]
+    assert max(abs(p - (ti - t[0])) for p, ti in zip(pts, t)) < 0.002
+
+
 def test_log_button_stays_off_while_connected(client):
     client.post("/api/drones/t1/record", json={"what": "log", "on": False})
     time.sleep(2.5)                       # several 1 Hz link updates

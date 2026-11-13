@@ -11,7 +11,7 @@ It does three things: shows the video, lets a human fly with the keyboard, and s
 | **Telemetry** | Every field the drone sends, as received: live table, one chart per field, raw packet stream |
 | **Log** | Every command with the drone's reply and RTT, every unsolicited drone message, GCS events |
 | **Safety** | Stick limit (clamped on the GCS), dead-man (sticks → 0 when key input stops), link-lost timeout |
-| **Recording** | While connected: telemetry CSV (parsed fields + raw string + rc sent), events JSONL, `udp.log` (every command-port datagram); video MP4 and snapshots on demand. Flight review tab. |
+| **Recording** | While connected: telemetry CSV (parsed fields + raw string + rc sent), events JSONL, `udp.log` (every command-port datagram); video MP4 (every frame once, real frame times) + `frames.csv` (frame → time, same clock as the telemetry CSV) and snapshots on demand. Flight review tab. |
 | **Simulator** | Software-in-the-loop Tello (real UDP protocol, synthetic FPV video) |
 | **Integration** | REST + WebSocket API (`/docs`), raw H.264 UDP relay for SLAM / ROS |
 

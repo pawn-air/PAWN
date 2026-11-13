@@ -5,8 +5,12 @@ Each session is a folder ``recordings/<YYYYmmdd-HHMMSS>_<drone>/``:
     telemetry.csv      every state packet as received: parsed fields + the raw string + rc sent by the GCS
     events.jsonl       events, commands (with reply + RTT), unsolicited drone messages
     udp.log            every datagram on the command port, both directions, rc and keepalives included
-    video.mp4          FPV video (while video recording is on)
+    video.mp4          FPV video (while video recording is on): every decoded frame exactly once,
+                       presentation time = decode time (variable frame rate, no duplicated frames)
+    frames.csv         one row per video.mp4 frame: frame index, decode time ``t`` (same clock as
+                       telemetry.csv ``t``), decoder frame id (gaps = frames the writer had to drop)
     snapshots/*.jpg
+meta.json ``video`` holds the frame count, dropped frames, first/last frame time and the encoder.
 The web UI lists, downloads and replays sessions (Flight review tab).
 """
 from __future__ import annotations
@@ -19,6 +23,7 @@ import shutil
 import threading
 import time
 from datetime import datetime
+from fractions import Fraction
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -34,32 +39,52 @@ log = logging.getLogger("pawn.rec")
 TELEM_COLS = ["t", *STATE_FIELDS, "rc_lr", "rc_fb", "rc_ud", "rc_yw", "raw"]
 
 
+_MS = Fraction(1, 1000)
+
+
 class _VideoWriter(threading.Thread):
-    def __init__(self, path: Path) -> None:
+    """Writes every queued frame once; frames.csv maps each video frame to its decode time."""
+
+    def __init__(self, path: Path, crf: int = 18) -> None:
         super().__init__(daemon=True, name="vidwriter")
         self.path = path
+        self.crf = crf
         self.q: queue.Queue = queue.Queue(maxsize=120)
         self.frames = 0
+        self.dropped = 0            # frames that never reached the queue (writer too slow)
+        self.t_first: float | None = None
+        self.t_last: float | None = None
+        self.encoder = ""
         self._w = None
-        self._t0 = None
+        self._pts = -1
+        self._idx_f = open(path.with_name("frames.csv"), "w", newline="", encoding="utf-8")
+        self._idx = csv.writer(self._idx_f)
+        self._idx.writerow(["frame", "t", "src_id"])
 
     def _open(self, w: int, h: int) -> None:
-        """Prefer H.264 via PyAV (plays in every browser); fall back to OpenCV mp4v."""
+        """Prefer H.264 via PyAV (plays in every browser, real timing); fall back to OpenCV mp4v."""
         try:
             import av
             self._c = av.open(str(self.path), "w")
             self._s = self._c.add_stream("libx264", rate=30)
             self._s.width, self._s.height, self._s.pix_fmt = w, h, "yuv420p"
-            self._s.options = {"preset": "veryfast", "crf": "23"}
+            self._s.codec_context.time_base = _MS
+            self._s.options = {"preset": "veryfast", "crf": str(self.crf)}
             self._av = av
             self._w = "av"
+            self.encoder = f"libx264 crf {self.crf}, variable frame rate"
         except Exception as e:
+            # mp4v has no per-frame timestamps: frames are still written once, but play back at a nominal
+            # 30 fps - frames.csv is the only source of the real timing then
             log.info("PyAV H.264 writer unavailable (%s) - using OpenCV mp4v", e)
             self._w = cv2.VideoWriter(str(self.path), cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (w, h))
+            self.encoder = "opencv mp4v, nominal 30 fps (timing only in frames.csv)"
 
-    def _write(self, img) -> None:
+    def _write(self, img, t: float) -> None:
         if self._w == "av":
             fr = self._av.VideoFrame.from_ndarray(img, format="bgr24")
+            self._pts = max(round((t - self.t_first) * 1000), self._pts + 1)  # strictly increasing
+            fr.pts, fr.time_base = self._pts, _MS
             for pkt in self._s.encode(fr):
                 self._c.mux(pkt)
         else:
@@ -70,22 +95,26 @@ class _VideoWriter(threading.Thread):
             item = self.q.get()
             if item is None:
                 break
-            img, t = item
+            img, t, src_id = item
             if self._w is None:
                 h, w = img.shape[:2]
+                self.t_first = t
                 self._open(w, h)
-                self._t0 = t
-            # keep wall-clock timing at 30 fps: duplicate/skip frames as needed
-            target = int((t - self._t0) * 30) + 1
-            while self.frames < target:
-                self._write(img)
-                self.frames += 1
+            self._write(img, t)
+            self._idx.writerow([self.frames, f"{t:.6f}", src_id])
+            self.frames += 1
+            self.t_last = t
         if self._w == "av":
             for pkt in self._s.encode():
                 self._c.mux(pkt)
             self._c.close()
         elif self._w is not None:
             self._w.release()
+        self._idx_f.close()
+
+    def summary(self) -> dict:
+        return {"file": self.path.name, "index": "frames.csv", "frames": self.frames, "dropped": self.dropped,
+                "t_first": self.t_first, "t_last": self.t_last, "encoder": self.encoder}
 
 
 class Recorder:
@@ -161,7 +190,7 @@ class Recorder:
             return
         if not self.session:
             self.start_log()
-        self._vw = _VideoWriter(self.session / "video.mp4")
+        self._vw = _VideoWriter(self.session / "video.mp4", int(self.settings.get("recording.video_crf", 18)))
         self._vw.start()
         self.node.bus.event("Video recording started", "info", self.node.id, src="recorder")
         self._pub()
@@ -174,11 +203,29 @@ class Recorder:
 
             def _finish():  # flush the encoder off the event loop
                 vw.join(timeout=30)
-                self.node.bus.event(f"Video saved ({vw.frames} frames)", "success", self.node.id, src="recorder")
+                self._save_video_meta(vw)
+                self.node.bus.event(f"Video saved ({vw.frames} frames, {vw.dropped} dropped)", "success",
+                                    self.node.id, src="recorder")
                 self._pub()
             t = threading.Thread(target=_finish, daemon=True)
             self._finishers.append(t)
             t.start()
+
+    def _save_video_meta(self, vw: _VideoWriter) -> None:
+        """Add the video summary to the meta.json of the session the video belongs to
+        (the log may already be closed, or a new session started, when the encoder finishes)."""
+        p = vw.path.with_name("meta.json")
+        with self._lock:
+            if self.session == vw.path.parent:
+                self._meta["video"] = vw.summary()
+                meta = self._meta
+            else:
+                try:
+                    meta = json.loads(p.read_text("utf-8"))
+                except Exception:
+                    meta = {}
+                meta["video"] = vw.summary()
+            p.write_text(json.dumps(meta, indent=2), "utf-8")
 
     def flush(self, timeout: float = 30) -> None:
         """Wait for pending video files to be finalised (called on shutdown)."""
@@ -243,9 +290,9 @@ class Recorder:
         vw = self._vw
         if vw:
             try:
-                vw.q.put_nowait((fr.img, fr.t))
+                vw.q.put_nowait((fr.img, fr.t, fr.id))
             except queue.Full:
-                pass
+                vw.dropped += 1
 
 
 class SessionIndex:

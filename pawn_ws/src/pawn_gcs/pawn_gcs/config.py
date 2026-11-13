@@ -65,6 +65,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
     "recording": {
         "log_on_connect": True,        # telemetry/event log runs while connected
+        "video_crf": 18,               # H.264 quality of video.mp4 (lower = better, bigger; 18 keeps detail for SLAM)
     },
 }
 

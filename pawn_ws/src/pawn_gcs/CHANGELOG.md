@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.0 — recordings usable as SLAM datasets
+* `video.mp4` holds every decoded frame exactly once with its real time (variable frame rate); frames are no
+  longer duplicated or skipped to fake a constant 30 fps.
+* New `frames.csv` per video: frame index → decode time `t` (same clock as `telemetry.csv`) → decoder frame id.
+* `meta.json` gets a `video` summary: frames, dropped frames, first/last frame time, encoder.
+* Frames the writer has to drop are counted (shown in the "Video saved" event) instead of vanishing silently.
+* New setting `recording.video_crf` (default 18, was a fixed 23) for less re-encoding loss.
+
 ## 3.0.0 — minimal GCS
 * Stripped to video, keyboard control, raw telemetry and logs. The GCS never flies on its own.
 * Removed: missions, map, vision plugins, autonomy, target localisation, RTH/backtracking, coverage, search patterns,
